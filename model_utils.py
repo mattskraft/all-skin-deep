@@ -1,0 +1,341 @@
+
+import tensorflow as tf
+from tensorflow.keras.metrics import top_k_categorical_accuracy
+from tensorflow.keras import backend as K
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.layers import Dense, Dropout, GlobalAveragePooling2D
+from tensorflow.keras.models import Model
+from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from sklearn.metrics import classification_report, confusion_matrix
+import numpy as np
+from pathlib import Path
+import pandas as pd
+from config import (
+    OVERSAMPLE_FACTOR,
+    BATCH_SIZE,
+    CLASS_MULTIPLIERS,
+    BLOCKS_TO_UNFREEZE,
+    IMAGE_SIZE,
+    CLASS_WEIGHTS,
+)
+
+
+# Top-k accuracy metrics
+def top_3_accuracy(y_true, y_pred):
+    return top_k_categorical_accuracy(y_true, y_pred, k=3)
+
+
+def weighted_focal_loss(gamma=2.0, class_weights=CLASS_WEIGHTS):
+    """
+    Focal Loss with class weights for multi-class classification
+
+    Args:
+        gamma: focusing parameter
+        class_weights: dictionary mapping class indices to weights
+
+    Returns:
+        Compiled weighted focal loss function
+    """
+    def focal_loss(y_true, y_pred):
+        epsilon = K.epsilon()
+        y_pred = K.clip(y_pred, epsilon, 1.0 - epsilon)
+
+        # Initialize with ones if no class weights provided
+        if class_weights is None:
+            weights = tf.ones_like(y_true)
+        else:
+            # Convert class_weights dict to a tensor
+            weights = tf.zeros_like(y_true)
+            for class_idx, weight in class_weights.items():
+                # Add weight for each class where y_true has 1
+                class_mask = tf.cast(tf.equal(tf.argmax(y_true, axis=-1), class_idx), tf.float32)
+                class_mask = tf.expand_dims(class_mask, axis=-1)
+                class_weight = tf.ones_like(y_true) * weight
+                weights = weights + (class_mask * class_weight)
+
+        # Calculate focal weight
+        focal_weight = tf.pow(1.0 - y_pred, gamma)
+
+        # Calculate the cross entropy
+        cross_entropy = -y_true * K.log(y_pred)
+
+        # Apply both weights
+        loss = weights * focal_weight * cross_entropy
+
+        return K.sum(loss, axis=-1)
+
+    return focal_loss
+
+
+def build_model(num_classes, weights='imagenet'):
+    
+    base_model = MobileNetV2(
+        weights=weights,  # 'imagenet' or None
+        include_top=False,
+        input_shape=(IMAGE_SIZE, IMAGE_SIZE, 3)
+    )
+
+    # Freeze all layers
+    for layer in base_model.layers:
+        layer.trainable = False
+
+    # Unfreeze selected blocks
+    for layer in base_model.layers:
+        if any(block in layer.name for block in BLOCKS_TO_UNFREEZE):
+            layer.trainable = True
+
+    # Add classification head
+    x = base_model.output
+    x = GlobalAveragePooling2D()(x)
+    x = Dropout(0.5)(x)
+    x = Dense(128, activation='relu')(x)
+    x = Dropout(0.3)(x)
+    predictions = Dense(num_classes, activation='softmax')(x)
+
+    model = Model(inputs=base_model.input, outputs=predictions)
+    return model
+
+
+# Custom F1 Macro Score metric
+class F1MacroScore(tf.keras.metrics.Metric):
+    def __init__(self, num_classes, name='f1_macro', **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.num_classes = num_classes
+        # Initialize state variables with correct parameter format
+        self.true_positives = self.add_weight(
+            name='true_positives', shape=(num_classes,), initializer='zeros')
+        self.false_positives = self.add_weight(
+            name='false_positives', shape=(num_classes,), initializer='zeros')
+        self.false_negatives = self.add_weight(
+            name='false_negatives', shape=(num_classes,), initializer='zeros')
+
+    # Rest of the class implementation remains the same
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        # Convert probabilities to class indices
+        y_pred = tf.argmax(y_pred, axis=1)
+        y_true = tf.argmax(y_true, axis=1)
+
+        # One-hot encode predictions and true values
+        y_pred = tf.one_hot(y_pred, self.num_classes)
+        y_true = tf.one_hot(y_true, self.num_classes)
+
+        # Calculate TP, FP, FN for each class
+        self.true_positives.assign_add(
+            tf.reduce_sum(y_true * y_pred, axis=0))
+        self.false_positives.assign_add(
+            tf.reduce_sum((1 - y_true) * y_pred, axis=0))
+        self.false_negatives.assign_add(
+            tf.reduce_sum(y_true * (1 - y_pred), axis=0))
+
+    def result(self):
+        # Calculate precision and recall for each class
+        precision = self.true_positives / (self.true_positives + self.false_positives + tf.keras.backend.epsilon())
+        recall = self.true_positives / (self.true_positives + self.false_negatives + tf.keras.backend.epsilon())
+
+        # Calculate F1 score for each class
+        f1_score = 2 * precision * recall / (precision + recall + tf.keras.backend.epsilon())
+
+        # Return macro average (mean of all class F1 scores)
+        return tf.reduce_mean(f1_score)
+
+    def reset_state(self):
+        self.true_positives.assign(tf.zeros(self.num_classes))
+        self.false_positives.assign(tf.zeros(self.num_classes))
+        self.false_negatives.assign(tf.zeros(self.num_classes))
+
+
+# Custom callback to monitor per-class metrics
+class ClassMetricsCallback(tf.keras.callbacks.Callback):
+    def __init__(self, validation_data, class_names, log_interval=5):
+        super().__init__()
+        self.validation_data = validation_data
+        self.class_names = class_names
+        self.log_interval = log_interval
+        self.class_metrics_history = []
+
+    def on_epoch_end(self, epoch, logs=None):
+        if (epoch + 1) % self.log_interval == 0 or epoch == 0:
+            # Get predictions
+            val_pred = np.argmax(self.model.predict(self.validation_data), axis=1)
+            val_true = self.validation_data.classes
+
+            # Calculate confusion matrix
+            cm = confusion_matrix(val_true, val_pred)
+
+            # Calculate per-class metrics
+            report = classification_report(val_true, val_pred,
+                                          target_names=self.class_names,
+                                          output_dict=True)
+
+            # Calculate and add F1 macro to logs
+            f1_scores = [report[class_name]['f1-score'] for class_name in self.class_names]
+            f1_macro = np.mean(f1_scores)
+            if logs is not None:
+                logs['val_f1_macro'] = f1_macro
+
+            # Log info
+            print(f"\nEpoch {epoch+1} - Class Metrics:")
+            print(f"F1 Macro: {f1_macro:.4f}")
+            for class_name in self.class_names:
+                print(f"{class_name}: F1={report[class_name]['f1-score']:.4f}, "
+                      f"Precision={report[class_name]['precision']:.4f}, "
+                      f"Recall={report[class_name]['recall']:.4f}")
+
+            # Store for later visualization
+            self.class_metrics_history.append({
+                'epoch': epoch + 1,
+                'confusion_matrix': cm,
+                'report': report,
+                'f1_macro': f1_macro
+            })
+
+
+def make_callbacks_list(model_save_path, val_generator):
+    checkpoint = ModelCheckpoint(
+        model_save_path,
+        monitor='val_f1_macro',
+        verbose=1,
+        save_best_only=True,
+        mode='max'
+    )
+
+    reduce_lr = ReduceLROnPlateau(
+        monitor='val_f1_macro',
+        factor=0.5,
+        patience=4,
+        verbose=1,
+        mode='max',
+        min_lr=0.00001
+    )
+
+    early_stopping = EarlyStopping(
+        monitor='val_f1_macro',
+        patience=8,
+        verbose=1,
+        restore_best_weights=True,
+        mode='max'
+    )
+
+    class_metrics = ClassMetricsCallback(
+        validation_data=val_generator,
+        class_names=['akiec', 'bcc', 'bkl', 'df', 'mel', 'nv', 'vasc'],
+        log_interval=2
+    )
+
+    return [checkpoint, reduce_lr, early_stopping, class_metrics]
+
+
+datagen_with_augment = ImageDataGenerator(
+    preprocessing_function=tf.keras.applications.mobilenet_v2.preprocess_input,
+    rotation_range=360,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True,
+    vertical_flip=True,
+    brightness_range=[0.9, 1.1],
+    fill_mode='nearest',
+)
+
+
+datagen_only_preproc = ImageDataGenerator(
+    preprocessing_function=tf.keras.applications.mobilenet_v2.preprocess_input
+)
+
+
+def create_regular_generator(dir, with_augment=False, shuffle=False, batch_size=BATCH_SIZE):
+    generator=datagen_with_augment if with_augment else datagen_only_preproc
+    return generator.flow_from_directory(
+        dir,
+        target_size=(IMAGE_SIZE, IMAGE_SIZE),
+        batch_size=batch_size,
+        class_mode='categorical',
+        shuffle=shuffle,
+        seed=42
+    )
+
+
+def create_weighted_generator(dir, with_augment=True, shuffle=True,
+                              batch_size=BATCH_SIZE, class_multipliers=CLASS_MULTIPLIERS):
+    # regular generator
+    gen = create_regular_generator(dir, with_augment, shuffle, batch_size*OVERSAMPLE_FACTOR)
+
+    # Get class indices
+    class_indices = gen.class_indices
+    class_weights_array = np.ones(len(class_indices))
+
+    # If sampling weights provided, use them
+    if class_multipliers:
+        for class_name, weight in class_multipliers.items():
+            # Get the numerical index corresponding to the class name
+            idx = class_indices[class_name]
+            class_weights_array[idx] = weight # Now use the numerical index
+
+    while True:
+        # Get a large batch
+        x_large, y_large = next(gen)
+
+        # Get class indices for each sample
+        class_idxs = np.argmax(y_large, axis=1)
+
+        # Calculate selection probabilities based on weights
+        probs = np.array([class_weights_array[idx] for idx in class_idxs])
+        probs = probs / probs.sum()  # Normalize
+
+        # Select indices based on weights
+        selected_indices = np.random.choice(
+            len(y_large), size=min(batch_size, len(y_large)),
+            replace=False, p=probs
+        )
+
+        # Return weighted batch
+        yield x_large[selected_indices], y_large[selected_indices]
+
+
+def save_training_artifacts(model, history, model_dir, model_name):
+    """
+    Saves model, training history, and optional class-level metrics to disk.
+
+    Args:
+        model: Trained Keras model.
+        history: History object returned by model.fit().
+        model_dir: Directory to save artifacts (can be Path or str).
+        model_name: Base name for saved files (no extension).
+    """
+    model_dir = Path(model_dir)
+
+    try:
+        model_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Created folder: {model_dir}")
+    except Exception as e:
+        print(f"Error creating folder: {e}")
+
+    # 1. Save the model
+    model_path = model_dir / f"{model_name}.h5"
+    model.save(model_path)
+    print(f"Model saved to {model_path}")
+
+    # 2. Save training history as CSV
+    history_df = pd.DataFrame(history.history)
+    history_path = model_dir / f"{model_name}_history.csv"
+    history_df.to_csv(history_path, index=False)
+    print(f"Training history saved to {history_path}")
+
+    # 3. Save optional class-level metrics (if available)
+    if hasattr(history, "class_metrics_history"):
+        class_metrics = history.class_metrics_history
+        if isinstance(class_metrics, dict):
+            class_df = pd.DataFrame(class_metrics)
+        else:
+            try:
+                class_df = pd.DataFrame.from_records(class_metrics)
+            except Exception:
+                print("⚠️ Could not convert class_metrics_history to DataFrame.")
+                return
+
+        class_metrics_path = model_dir / f"{model_name}_class_metrics.csv"
+        class_df.to_csv(class_metrics_path, index=False)
+        print(f"Class metrics saved to {class_metrics_path}")
+    else:
+        print("No class_metrics_history found in history.")
