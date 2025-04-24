@@ -4,7 +4,7 @@ from config import (
     create_regular_generator,
     build_model,
     make_callbacks_list,
-    save_training_artifacts
+    save_training_artifacts,
 )
 
 from config import (
@@ -16,6 +16,7 @@ from config import (
 from config import (
     TRAIN_1_DIR,
     VAL_1_DIR,
+    MODEL_DIR,
     OVERSAMPLE_FACTOR,
     BATCH_SIZE,
     CLASS_MULTIPLIERS,
@@ -76,4 +77,6 @@ history = model.fit(
 
 ## Save model
 print("\nSaving model...")
-save_training_artifacts(model, history, model_dir, model_name)
+save_training_artifacts(model, history, MODEL_DIR, "finetune_orig")
+print("Model saved successfully.")
+print("\nTraining completed.")
