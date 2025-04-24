@@ -1,10 +1,11 @@
 
 import tensorflow as tf
-from tensorflow.keras.metrics import top_k_categorical_accuracy
+from tensorflow.keras.metrics import categorical_accuracy, top_k_categorical_accuracy
 from tensorflow.keras import backend as K
 from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.layers import Dense, Dropout, GlobalAveragePooling2D
-from tensorflow.keras.models import Model
+from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from sklearn.metrics import classification_report, confusion_matrix
@@ -17,9 +18,8 @@ from config import (
     CLASS_MULTIPLIERS,
     BLOCKS_TO_UNFREEZE,
     IMAGE_SIZE,
-    CLASS_WEIGHTS,
+    CLASS_WEIGHTS
 )
-
 
 # Top-k accuracy metrics
 def top_3_accuracy(y_true, y_pred):
@@ -94,7 +94,25 @@ def build_model(num_classes, weights='imagenet'):
     predictions = Dense(num_classes, activation='softmax')(x)
 
     model = Model(inputs=base_model.input, outputs=predictions)
+
+    # Print unfreezing information
+    print(f"\nUnfreezing blocks: {', '.join(BLOCKS_TO_UNFREEZE)}")
+    # Count trainable vs non-trainable parameters
+    trainable_params = sum([K.count_params(w) for w in model.trainable_weights])
+    non_trainable_params = sum([K.count_params(w) for w in model.non_trainable_weights])
+    print(f"\nTrainable parameters: {trainable_params:,}")
+    print(f"Non-trainable parameters: {non_trainable_params:,}")
+    print(f"Total parameters: {trainable_params + non_trainable_params:,}")
+
     return model
+
+
+def compile_model(model, learning_rate=0.001):
+    return model.compile(
+        optimizer=Adam(learning_rate=learning_rate),
+        loss=get_loss_function(class_weights=CLASS_WEIGHTS),
+        metrics=[categorical_accuracy, top_3_accuracy, F1MacroScore(num_classes=len(CLASS_WEIGHTS))]
+)
 
 
 # Custom F1 Macro Score metric
@@ -191,6 +209,29 @@ class ClassMetricsCallback(tf.keras.callbacks.Callback):
             })
 
 
+CUSTOM_OBJECTS = {
+    'top_3_accuracy': top_3_accuracy,
+    'F1MacroScore': F1MacroScore
+}
+
+
+def get_loss_function(class_weights=None, gamma=2.0):
+    """
+    Return the weighted focal loss function with the specified parameters.
+    """
+    return weighted_focal_loss(gamma=gamma, class_weights=class_weights)
+
+
+def load_model_from_path(model_path):
+    """
+    Load a model from the specified path, including custom objects.
+    """
+    print(f"Loading model from {model_path}")
+    custom_objects = CUSTOM_OBJECTS.copy()
+    custom_objects['focal_loss'] = get_loss_function(class_weights=CLASS_WEIGHTS)
+    return load_model(model_path, custom_objects=custom_objects)
+
+
 def make_callbacks_list(model_save_path, val_generator):
     checkpoint = ModelCheckpoint(
         model_save_path,
@@ -258,8 +299,28 @@ def create_regular_generator(dir, with_augment=False, shuffle=False, batch_size=
 
 def create_weighted_generator(dir, with_augment=True, shuffle=True,
                               batch_size=BATCH_SIZE, class_multipliers=CLASS_MULTIPLIERS):
+    """
+    Creates a weighted generator with oversampling based on class_multipliers.
+    
+    Args:
+        dir: Directory containing class subdirectories
+        with_augment: Whether to apply data augmentation
+        shuffle: Whether to shuffle data
+        batch_size: Batch size for the generator
+        class_multipliers: Dictionary mapping class names to sampling weights
+        
+    Returns:
+        tuple: (generator, steps_per_epoch) - the data generator and calculated steps per epoch
+    """
     # regular generator
     gen = create_regular_generator(dir, with_augment, shuffle, batch_size*OVERSAMPLE_FACTOR)
+
+    # Calculate steps_per_epoch
+    total_original_images = sum(
+        len([f for f in os.listdir(os.path.join(dir, class_name)) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+        for class_name in class_multipliers
+    )
+    steps_per_epoch = int(total_original_images / batch_size * OVERSAMPLE_FACTOR)
 
     # Get class indices
     class_indices = gen.class_indices
@@ -272,33 +333,43 @@ def create_weighted_generator(dir, with_augment=True, shuffle=True,
             idx = class_indices[class_name]
             class_weights_array[idx] = weight # Now use the numerical index
 
-    while True:
-        # Get a large batch
-        x_large, y_large = next(gen)
+    # Create the generator function
+    def weighted_generator():
+        while True:
+            # Get a large batch
+            x_large, y_large = next(gen)
 
-        # Get class indices for each sample
-        class_idxs = np.argmax(y_large, axis=1)
+            # Get class indices for each sample
+            class_idxs = np.argmax(y_large, axis=1)
 
-        # Calculate selection probabilities based on weights
-        probs = np.array([class_weights_array[idx] for idx in class_idxs])
-        probs = probs / probs.sum()  # Normalize
+            # Calculate selection probabilities based on weights
+            probs = np.array([class_weights_array[idx] for idx in class_idxs])
+            probs = probs / probs.sum()  # Normalize
 
-        # Select indices based on weights
-        selected_indices = np.random.choice(
-            len(y_large), size=min(batch_size, len(y_large)),
-            replace=False, p=probs
+            # Select indices based on weights
+            selected_indices = np.random.choice(
+                len(y_large), size=min(batch_size, len(y_large)),
+                replace=False, p=probs
+            )
+
+            # Return weighted batch
+            yield x_large[selected_indices], y_large[selected_indices]
+    
+    # Return both the generator and steps_per_epoch
+    return tf.data.Dataset.from_generator(
+        weighted_generator,
+        output_signature=(
+            tf.TensorSpec(shape=(None, IMAGE_SIZE, IMAGE_SIZE, 3), dtype=tf.float32),
+            tf.TensorSpec(shape=(None, len(class_indices)), dtype=tf.float32)
         )
-
-        # Return weighted batch
-        yield x_large[selected_indices], y_large[selected_indices]
+    ), steps_per_epoch
 
 
-def save_training_artifacts(model, history, model_dir, model_name):
+def save_training_artifacts(history, model_dir, model_name):
     """
-    Saves model, training history, and optional class-level metrics to disk.
+    Saves training history, and optional class-level metrics.
 
     Args:
-        model: Trained Keras model.
         history: History object returned by model.fit().
         model_dir: Directory to save artifacts (can be Path or str).
         model_name: Base name for saved files (no extension).
@@ -311,18 +382,13 @@ def save_training_artifacts(model, history, model_dir, model_name):
     except Exception as e:
         print(f"Error creating folder: {e}")
 
-    # 1. Save the model
-    model_path = model_dir / f"{model_name}.h5"
-    model.save(model_path)
-    print(f"Model saved to {model_path}")
-
-    # 2. Save training history as CSV
+    # Save training history as CSV
     history_df = pd.DataFrame(history.history)
     history_path = model_dir / f"{model_name}_history.csv"
     history_df.to_csv(history_path, index=False)
     print(f"Training history saved to {history_path}")
 
-    # 3. Save optional class-level metrics (if available)
+    # Save optional class-level metrics (if available)
     if hasattr(history, "class_metrics_history"):
         class_metrics = history.class_metrics_history
         if isinstance(class_metrics, dict):
