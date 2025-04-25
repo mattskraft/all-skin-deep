@@ -101,9 +101,9 @@ def main(args):
     print(f"Found {len(classes)} classes: {', '.join(classes)}")
     
     # Create the dataset directories
-    test_dir = os.path.join(args.output_dir, "test_dataset")
-    balanced_dir = os.path.join(args.output_dir, "balanced_dataset")
-    unbalanced_dir = os.path.join(args.output_dir, "unbalanced_dataset")
+    test_dir = os.path.join(args.output_dir, "dataset_test")
+    balanced_dir = os.path.join(args.output_dir, "dataset_balanced")
+    unbalanced_dir = os.path.join(args.output_dir, "dataset_stage1")
     
     # Step 1: Create initial test split (15% of full dataset)
     print("\nStep 1: Creating initial 85/15 train-test split...")
