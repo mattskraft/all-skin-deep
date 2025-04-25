@@ -1,4 +1,3 @@
-
 import tensorflow as tf
 from tensorflow.keras.metrics import categorical_accuracy, top_k_categorical_accuracy
 from tensorflow.keras import backend as K
@@ -22,21 +21,35 @@ from config import (
     CLASS_WEIGHTS
 )
 
-# Top-k accuracy metrics
 def top_3_accuracy(y_true, y_pred):
+    """
+    Calculate top-3 accuracy metric.
+    
+    Args:
+        y_true: Ground truth labels in one-hot encoding
+        y_pred: Predicted probabilities for each class
+        
+    Returns:
+        Top-3 accuracy score
+    """
     return top_k_categorical_accuracy(y_true, y_pred, k=3)
 
 
 def weighted_focal_loss(gamma=2.0, class_weights=CLASS_WEIGHTS):
     """
-    Focal Loss with class weights for multi-class classification
-
+    Create a weighted focal loss function for handling class imbalance.
+    
+    Focal loss focuses more on hard examples by down-weighting easy examples.
+    This implementation also supports class weights to handle imbalanced datasets.
+    
     Args:
-        gamma: focusing parameter
-        class_weights: dictionary mapping class indices to weights
-
+        gamma: Focusing parameter that controls how much to down-weight easy examples.
+              Higher gamma values give more weight to hard, misclassified examples.
+        class_weights: Dictionary mapping class indices to weights for each class.
+                      Higher weights increase the importance of corresponding classes.
+    
     Returns:
-        Compiled weighted focal loss function
+        Compiled weighted focal loss function that can be used as a Keras loss function
     """
     def focal_loss(y_true, y_pred):
         epsilon = K.epsilon()
@@ -70,7 +83,19 @@ def weighted_focal_loss(gamma=2.0, class_weights=CLASS_WEIGHTS):
 
 
 def build_model(num_classes, weights='imagenet'):
+    """
+    Build a MobileNetV2-based model with custom classification head.
     
+    Creates a transfer learning model based on MobileNetV2, with selectively
+    unfrozen blocks and a custom classification head for skin lesion classification.
+    
+    Args:
+        num_classes: Number of output classes for the classifier
+        weights: Pre-trained weights to use, 'imagenet' (default) or None
+    
+    Returns:
+        Configured Keras Model ready to be compiled
+    """
     base_model = MobileNetV2(
         weights=weights,  # 'imagenet' or None
         include_top=False,
@@ -109,6 +134,16 @@ def build_model(num_classes, weights='imagenet'):
 
 
 def compile_model(model, learning_rate=0.001):
+    """
+    Compile the model with appropriate loss, optimizer and metrics.
+    
+    Args:
+        model: Keras model to compile
+        learning_rate: Learning rate for the Adam optimizer
+        
+    Returns:
+        Compiled model ready for training
+    """
     return model.compile(
         optimizer=Adam(learning_rate=learning_rate),
         loss=get_loss_function(class_weights=CLASS_WEIGHTS),
@@ -116,9 +151,24 @@ def compile_model(model, learning_rate=0.001):
 )
 
 
-# Custom F1 Macro Score metric
 class F1MacroScore(tf.keras.metrics.Metric):
+    """
+    Custom F1 Macro Score metric for multi-class classification.
+    
+    Calculates F1 score for each class independently and averages them,
+    giving equal weight to each class regardless of sample count.
+    This is particularly useful for imbalanced datasets.
+    """
+    
     def __init__(self, num_classes, name='f1_macro', **kwargs):
+        """
+        Initialize the F1MacroScore metric.
+        
+        Args:
+            num_classes: Total number of classes in the classification task
+            name: Name of the metric
+            **kwargs: Additional arguments to pass to the parent class
+        """
         super().__init__(name=name, **kwargs)
         self.num_classes = num_classes
         # Initialize state variables with correct parameter format
@@ -129,8 +179,15 @@ class F1MacroScore(tf.keras.metrics.Metric):
         self.false_negatives = self.add_weight(
             name='false_negatives', shape=(num_classes,), initializer='zeros')
 
-    # Rest of the class implementation remains the same
     def update_state(self, y_true, y_pred, sample_weight=None):
+        """
+        Update metric state based on new predictions.
+        
+        Args:
+            y_true: Ground truth labels (one-hot encoded)
+            y_pred: Model predictions (probabilities)
+            sample_weight: Optional sample weights
+        """
         # Convert probabilities to class indices
         y_pred = tf.argmax(y_pred, axis=1)
         y_true = tf.argmax(y_true, axis=1)
@@ -148,6 +205,12 @@ class F1MacroScore(tf.keras.metrics.Metric):
             tf.reduce_sum(y_true * (1 - y_pred), axis=0))
 
     def result(self):
+        """
+        Calculate F1 macro score based on accumulated statistics.
+        
+        Returns:
+            F1 macro score averaged across all classes
+        """
         # Calculate precision and recall for each class
         precision = self.true_positives / (self.true_positives + self.false_positives + tf.keras.backend.epsilon())
         recall = self.true_positives / (self.true_positives + self.false_negatives + tf.keras.backend.epsilon())
@@ -159,14 +222,29 @@ class F1MacroScore(tf.keras.metrics.Metric):
         return tf.reduce_mean(f1_score)
 
     def reset_state(self):
+        """Reset all metric state variables to initial values."""
         self.true_positives.assign(tf.zeros(self.num_classes))
         self.false_positives.assign(tf.zeros(self.num_classes))
         self.false_negatives.assign(tf.zeros(self.num_classes))
 
 
-# Custom callback to monitor per-class metrics
 class ClassMetricsCallback(tf.keras.callbacks.Callback):
+    """
+    Custom callback to monitor per-class metrics during training.
+    
+    Calculates and logs detailed metrics for each class at specified intervals,
+    including precision, recall, F1 score, and confusion matrix.
+    """
+    
     def __init__(self, validation_data, class_names, log_interval=5):
+        """
+        Initialize the callback.
+        
+        Args:
+            validation_data: Validation data generator
+            class_names: List of class names in order matching model outputs
+            log_interval: Epoch interval for logging class metrics
+        """
         super().__init__()
         self.validation_data = validation_data
         self.class_names = class_names
@@ -174,6 +252,13 @@ class ClassMetricsCallback(tf.keras.callbacks.Callback):
         self.class_metrics_history = []
 
     def on_epoch_end(self, epoch, logs=None):
+        """
+        Calculate and log class metrics at the end of specified epochs.
+        
+        Args:
+            epoch: Current epoch index
+            logs: Dictionary of logs from training
+        """
         if (epoch + 1) % self.log_interval == 0 or epoch == 0:
             # Get predictions
             val_pred = np.argmax(self.model.predict(self.validation_data), axis=1)
@@ -210,6 +295,7 @@ class ClassMetricsCallback(tf.keras.callbacks.Callback):
             })
 
 
+# Dictionary of custom objects for model saving/loading
 CUSTOM_OBJECTS = {
     'top_3_accuracy': top_3_accuracy,
     'F1MacroScore': F1MacroScore
@@ -218,14 +304,27 @@ CUSTOM_OBJECTS = {
 
 def get_loss_function(class_weights=None, gamma=2.0):
     """
-    Return the weighted focal loss function with the specified parameters.
+    Return the weighted focal loss function with specified parameters.
+    
+    Args:
+        class_weights: Dictionary of class weights for loss calculation
+        gamma: Focusing parameter for focal loss
+        
+    Returns:
+        Configured loss function
     """
     return weighted_focal_loss(gamma=gamma, class_weights=class_weights)
 
 
 def load_model_from_path(model_path):
     """
-    Load a model from the specified path, including custom objects.
+    Load a model from the specified path, with proper handling of custom objects.
+    
+    Args:
+        model_path: Path to the saved model file
+        
+    Returns:
+        Loaded model ready to be compiled or used
     """
     print(f"Loading model from {model_path}")
     custom_objects = CUSTOM_OBJECTS.copy()
@@ -234,6 +333,22 @@ def load_model_from_path(model_path):
 
 
 def make_callbacks_list(model_save_path, val_generator):
+    """
+    Create a list of callbacks for model training.
+    
+    Includes:
+    - ModelCheckpoint: Save the best model based on validation F1 macro
+    - ReduceLROnPlateau: Reduce learning rate when metrics plateau
+    - EarlyStopping: Stop training when metrics stop improving
+    - ClassMetricsCallback: Calculate and log per-class metrics
+    
+    Args:
+        model_save_path: Path to save the best model
+        val_generator: Validation data generator
+        
+    Returns:
+        List of callbacks for use with model.fit()
+    """
     checkpoint = ModelCheckpoint(
         model_save_path,
         monitor='val_f1_macro',
@@ -268,6 +383,7 @@ def make_callbacks_list(model_save_path, val_generator):
     return [checkpoint, reduce_lr, early_stopping, class_metrics]
 
 
+# Data augmentation pipeline for training
 datagen_with_augment = ImageDataGenerator(
     preprocessing_function=tf.keras.applications.mobilenet_v2.preprocess_input,
     rotation_range=360,
@@ -280,13 +396,25 @@ datagen_with_augment = ImageDataGenerator(
     fill_mode='nearest',
 )
 
-
+# Data preprocessing pipeline for validation/testing (no augmentation)
 datagen_only_preproc = ImageDataGenerator(
     preprocessing_function=tf.keras.applications.mobilenet_v2.preprocess_input
 )
 
 
 def create_regular_generator(dir, with_augment=False, shuffle=False, batch_size=BATCH_SIZE):
+    """
+    Create a data generator from directory with optional augmentation.
+    
+    Args:
+        dir: Directory containing class subdirectories with images
+        with_augment: Whether to apply data augmentation (default: False)
+        shuffle: Whether to shuffle the data (default: False)
+        batch_size: Batch size for the generator (default: from config)
+        
+    Returns:
+        Keras DirectoryIterator for the specified directory
+    """
     generator=datagen_with_augment if with_augment else datagen_only_preproc
     return generator.flow_from_directory(
         dir,
@@ -301,13 +429,16 @@ def create_regular_generator(dir, with_augment=False, shuffle=False, batch_size=
 def create_weighted_generator(dir, with_augment=True, shuffle=True,
                               batch_size=BATCH_SIZE, class_multipliers=CLASS_MULTIPLIERS):
     """
-    Creates a weighted generator with oversampling based on class_multipliers.
+    Creates a weighted generator with oversampling based on class weights.
+    
+    This generator applies class-based weighting to handle imbalanced datasets,
+    giving more weight to underrepresented classes during batch selection.
     
     Args:
-        dir: Directory containing class subdirectories
-        with_augment: Whether to apply data augmentation
-        shuffle: Whether to shuffle data
-        batch_size: Batch size for the generator
+        dir: Directory containing class subdirectories with images
+        with_augment: Whether to apply data augmentation (default: True)
+        shuffle: Whether to shuffle the data (default: True)
+        batch_size: Batch size for the generator (default: from config)
         class_multipliers: Dictionary mapping class names to sampling weights
         
     Returns:
@@ -368,12 +499,12 @@ def create_weighted_generator(dir, with_augment=True, shuffle=True,
 
 def save_training_artifacts(history, model_dir, model_name):
     """
-    Saves training history, and optional class-level metrics.
-
+    Saves training history and optional class-level metrics to disk.
+    
     Args:
-        history: History object returned by model.fit().
-        model_dir: Directory to save artifacts (can be Path or str).
-        model_name: Base name for saved files (no extension).
+        history: History object returned by model.fit()
+        model_dir: Directory to save artifacts (can be Path or str)
+        model_name: Base name for saved files (no extension)
     """
     model_dir = Path(model_dir)
 
@@ -406,23 +537,3 @@ def save_training_artifacts(history, model_dir, model_name):
         print(f"Class metrics saved to {class_metrics_path}")
     else:
         print("No class_metrics_history found in history.")
-
-
-def setup_tf_device():
-    """Configure TensorFlow based on available hardware"""
-    # Check if GPUs are available
-    gpus = tf.config.list_physical_devices('GPU')
-    
-    if not gpus:
-        print("No GPU found. Using CPU.")
-        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Force CPU usage
-        return "CPU"
-    else:
-        print(f"Found {len(gpus)} GPU(s). Using GPU.")
-        # Optional: Configure memory growth to avoid allocating all memory
-        try:
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-        except RuntimeError as e:
-            print(f"GPU memory growth setting failed: {e}")
-        return "GPU"
