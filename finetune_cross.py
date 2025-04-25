@@ -13,11 +13,6 @@ from config import (
     LEARNING_RATE_2
 )
 
-
-val_generator = create_regular_generator(VAL_2_DIR, with_augment=False, shuffle=False)
-callbacks_list = make_callbacks_list(MODEL_DIR / "finetune_cross_best.h5", val_generator)
-
-
 # Load the pre-trained model from stage 1
 model_path = MODEL_DIR / "finetune_orig_best.h5"
 model = load_model_from_path(model_path)
@@ -33,6 +28,9 @@ for i, half in enumerate(["first_half", "second_half"]):
     
     train_dir = TRAIN_2_DIR / half
     train_generator = create_regular_generator(train_dir, with_augment=True, shuffle=True)
+    val_dir = VAL_2_DIR / half
+    val_generator = create_regular_generator(val_dir, with_augment=False, shuffle=False)
+    callbacks_list = make_callbacks_list(MODEL_DIR / "finetune_cross_best.h5", val_generator)
 
     print(f"\nStarting fine-tuning (Round {i})...")
 
