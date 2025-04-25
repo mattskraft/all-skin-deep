@@ -17,6 +17,7 @@ VAL_1_DIR = DATA_DIR / "dataset_stage1" / "val"
 TRAIN_2_DIR = DATA_DIR / "dataset_stage2" / "train"
 VAL_2_DIR = DATA_DIR / "dataset_stage2" / "validation"
 MODEL_DIR = PROJECT_DIR / "models"
+PLOT_DIR = PROJECT_DIR / "plots"
 
 '''
 Based solely on the number of images per class, the class weights are:
