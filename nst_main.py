@@ -8,18 +8,12 @@ from pathlib import Path
 from tqdm.notebook import tqdm
 import argparse
 import random
-
-# Import utilities
 from nst_utils import (
     device, image_loader, get_all_images, save_generated_image, run_style_transfer
 )
 
 # Set default device
 torch.set_default_device(device)
-
-# Normalization values for preprocessing
-cnn_normalization_mean = torch.tensor([0.485, 0.456, 0.406])
-cnn_normalization_std = torch.tensor([0.229, 0.224, 0.225])
 
 # Function to process an entire directory
 def process_directory(input_dir, output_dir, style_dir, num_steps=1000, 
@@ -65,8 +59,8 @@ def process_directory(input_dir, output_dir, style_dir, num_steps=1000,
             style_path = random.choice(style_images)
             
             # Load images
-            content_img, content_name = image_loader(content_path)
-            style_img, style_name = image_loader(style_path)
+            content_img, _ = image_loader(content_path)
+            style_img, _ = image_loader(style_path)
             
             # Create input image (initially a copy of content image)
             input_img = content_img.clone()
@@ -81,8 +75,10 @@ def process_directory(input_dir, output_dir, style_dir, num_steps=1000,
             # Run style transfer
             try:
                 output_img = run_style_transfer(
-                    cnn, cnn_normalization_mean, cnn_normalization_std,
-                    content_img, style_img, input_img, 
+                    cnn,
+                    content_img,
+                    style_img,
+                    input_img, 
                     num_steps=num_steps,
                     style_weight=style_weight, 
                     content_weight=content_weight, 
@@ -125,8 +121,9 @@ def main():
     # Check for GPU
     print(f"Using device: {device}")
     
-    # Create output directory
+    # Handle paths
     content_path = Path(args.content)
+    style_path = Path(args.style)
     output_base = Path(args.output)
     output_base.mkdir(parents=True, exist_ok=True)
     
@@ -135,7 +132,7 @@ def main():
     process_directory(
         content_path, 
         output_base,
-        args.style,
+        style_path,
         num_steps=args.steps,
         style_weight=args.style_weight, 
         content_weight=args.content_weight

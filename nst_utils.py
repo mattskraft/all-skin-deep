@@ -110,8 +110,9 @@ class Normalization(nn.Module):
     
 
 # Function to build the style transfer model
-def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
-                               style_img, content_img,
+def get_style_model_and_losses(cnn,
+                               style_img,
+                               content_img,
                                content_layers=['conv_4'],
                                style_layers=['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']):
     """
@@ -119,8 +120,6 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
     
     Args:
         cnn: Pre-trained CNN model
-        normalization_mean: Normalization mean values
-        normalization_std: Normalization standard deviation values
         style_img: Style image tensor
         content_img: Content image tensor
         content_layers: Layers to use for content loss
@@ -129,7 +128,9 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
     Returns:
         tuple: (model, style_losses, content_losses)
     """
-    # normalization module
+    # Normalization for preprocessing
+    normalization_mean = torch.tensor([0.485, 0.456, 0.406])
+    normalization_std = torch.tensor([0.229, 0.224, 0.225])
     normalization = Normalization(normalization_mean, normalization_std)
 
     # just in order to have an iterable access to or list of content/style
@@ -185,7 +186,7 @@ def get_style_model_and_losses(cnn, normalization_mean, normalization_std,
     return model, style_losses, content_losses
 
 # Main style transfer function
-def run_style_transfer(cnn, normalization_mean, normalization_std,
+def run_style_transfer(cnn,
                        content_img, style_img, input_img, num_steps=1000,
                        style_weight=1000000, content_weight=1, verbose=True,
                        pbar=None):
@@ -194,8 +195,6 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
     
     Args:
         cnn: Pre-trained CNN model
-        normalization_mean: Normalization mean values
-        normalization_std: Normalization standard deviation values
         content_img: Content image tensor
         style_img: Style image tensor
         input_img: Input image tensor (starting point)
@@ -208,16 +207,18 @@ def run_style_transfer(cnn, normalization_mean, normalization_std,
     Returns:
         tensor: Stylized image tensor
     """
+
     if verbose:
         print('Building the style transfer model..')
     model, style_losses, content_losses = get_style_model_and_losses(cnn,
-        normalization_mean, normalization_std, style_img, content_img)
+                                                                     style_img,
+                                                                     content_img)
 
     # We want to optimize the input and not the model parameters so we
     # update all the requires_grad fields accordingly
     input_img.requires_grad_(True)
     # We also put the model in evaluation mode, so that specific layers
-    # such as dropout or batch normalization layers behave correctly.
+    # such as dropout or batch normalization layers behave correctly
     model.eval()
     model.requires_grad_(False)
 
