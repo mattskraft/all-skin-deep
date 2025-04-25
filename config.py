@@ -6,15 +6,16 @@ BATCH_SIZE = 32
 IMAGE_SIZE = 224
 LEARNING_RATE_1 = 0.0005
 LEARNING_RATE_2 = 0.0001
-OVERSAMPLE_FACTOR = 4.0
+OVERSAMPLE_FACTOR = 4
+NUM_EPOCHS = 40
 
-PROJECT_DIR = Path.cwd()
+PROJECT_DIR = Path(__file__).resolve().parent.absolute()
 DATA_DIR = PROJECT_DIR / "data"
-TEST_DIR = DATA_DIR / "test"
-TRAIN_1_DIR = DATA_DIR / "stage1" / "train"
-VAL_1_DIR = DATA_DIR / "stage1" / "validation"
-TRAIN_2_DIR = DATA_DIR / "stage2" / "train"
-VAL_2_DIR = DATA_DIR / "stage2" / "validation"
+TEST_DIR = DATA_DIR / "dataset_test" / "test"
+TRAIN_1_DIR = DATA_DIR / "dataset_stage1" / "train"
+VAL_1_DIR = DATA_DIR / "dataset_stage1" / "val"
+TRAIN_2_DIR = DATA_DIR / "dataset_stage2" / "train"
+VAL_2_DIR = DATA_DIR / "dataset_stage2" / "validation"
 MODEL_DIR = PROJECT_DIR / "models"
 
 '''
@@ -30,14 +31,23 @@ vasc: 1.640
 
 After some experimentation, I found that the following class weights work well:
 '''
+# CLASS_WEIGHTS = {
+#     'akiec': 1.5,
+#     'bcc': 1.0,
+#     'bkl': 1.0,
+#     'df': 2.5,
+#     'mel': 2.0,
+#     'nv': 0.2,
+#     'vasc': 2.0
+# }
 CLASS_WEIGHTS = {
-    'akiec': 1.5,
-    'bcc': 1.0,
-    'bkl': 1.0,
-    'df': 2.5,
-    'mel': 2.0,
-    'nv': 0.2,
-    'vasc': 2.0
+    0: 1.5,
+    1: 1.0,
+    2: 1.0,
+    3: 2.5,
+    4: 2.0,
+    5: 0.2,
+    6: 2.0
 }
 
 '''

@@ -12,6 +12,7 @@ from sklearn.metrics import classification_report, confusion_matrix
 import numpy as np
 from pathlib import Path
 import pandas as pd
+import os
 from config import (
     OVERSAMPLE_FACTOR,
     BATCH_SIZE,
@@ -229,7 +230,7 @@ def load_model_from_path(model_path):
     print(f"Loading model from {model_path}")
     custom_objects = CUSTOM_OBJECTS.copy()
     custom_objects['focal_loss'] = get_loss_function(class_weights=CLASS_WEIGHTS)
-    return load_model(model_path, custom_objects=custom_objects)
+    return load_model(model_path, custom_objects=custom_objects, compile=False)
 
 
 def make_callbacks_list(model_save_path, val_generator):
@@ -405,3 +406,23 @@ def save_training_artifacts(history, model_dir, model_name):
         print(f"Class metrics saved to {class_metrics_path}")
     else:
         print("No class_metrics_history found in history.")
+
+
+def setup_tf_device():
+    """Configure TensorFlow based on available hardware"""
+    # Check if GPUs are available
+    gpus = tf.config.list_physical_devices('GPU')
+    
+    if not gpus:
+        print("No GPU found. Using CPU.")
+        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Force CPU usage
+        return "CPU"
+    else:
+        print(f"Found {len(gpus)} GPU(s). Using GPU.")
+        # Optional: Configure memory growth to avoid allocating all memory
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError as e:
+            print(f"GPU memory growth setting failed: {e}")
+        return "GPU"
