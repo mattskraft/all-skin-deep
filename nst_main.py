@@ -8,6 +8,7 @@ from pathlib import Path
 from tqdm.notebook import tqdm
 import argparse
 import random
+import csv
 from nst_utils import (
     device, image_loader, get_all_images, save_generated_image, run_style_transfer
 )
@@ -20,6 +21,7 @@ def process_directory(input_dir, output_dir, style_dir, num_steps=1000,
                      style_weight=1000000, content_weight=1):
     """
     Process all images in a directory and its subdirectories.
+    Saves a CSV file mapping each generated image to its style source.
     
     Args:
         input_dir: Directory with content images
@@ -52,53 +54,69 @@ def process_directory(input_dir, output_dir, style_dir, num_steps=1000,
         output_path = Path(output_dir) / rel_path.parent
         output_path.mkdir(parents=True, exist_ok=True)
     
-    # Process each content image with a randomly selected style image
-    with tqdm(total=len(content_images), desc=f"Processing {input_dir.name}") as pbar:
-        for content_path in content_images:
-            # Select random style image
-            style_path = random.choice(style_images)
-            
-            # Load images
-            content_img, _ = image_loader(content_path)
-            style_img, _ = image_loader(style_path)
-            
-            # Create input image (initially a copy of content image)
-            input_img = content_img.clone()
-            
-            # Create style transfer progress bar (nested)
-            st_pbar = tqdm(
-                total=num_steps, 
-                desc=f"Style transferring {content_path.name}", 
-                leave=False
-            )
-            
-            # Run style transfer
-            try:
-                output_img = run_style_transfer(
-                    cnn,
-                    content_img,
-                    style_img,
-                    input_img, 
-                    num_steps=num_steps,
-                    style_weight=style_weight, 
-                    content_weight=content_weight, 
-                    verbose=False,
-                    pbar=st_pbar
+    # Create CSV file to track style-content pairs
+    csv_path = Path(output_dir) / "style_content_mapping.csv"
+    with open(csv_path, 'w', newline='') as csvfile:
+        csv_writer = csv.writer(csvfile)
+        # Write header
+        csv_writer.writerow(['generated_image', 'content_image', 'style_image'])
+        
+        # Process each content image with a randomly selected style image
+        with tqdm(total=len(content_images), desc=f"Processing {input_dir.name}") as pbar:
+            for content_path in content_images:
+                # Select random style image
+                style_path = random.choice(style_images)
+                
+                # Load images
+                content_img, _ = image_loader(content_path)
+                style_img, _ = image_loader(style_path)
+                
+                # Create input image (initially a copy of content image)
+                input_img = content_img.clone()
+                
+                # Create style transfer progress bar (nested)
+                st_pbar = tqdm(
+                    total=num_steps, 
+                    desc=f"Style transferring {content_path.name}", 
+                    leave=False
                 )
                 
-                # Calculate output path
-                rel_path = content_path.relative_to(input_dir)
-                output_file = Path(output_dir) / rel_path
+                # Run style transfer
+                try:
+                    output_img = run_style_transfer(
+                        cnn,
+                        content_img,
+                        style_img,
+                        input_img, 
+                        num_steps=num_steps,
+                        style_weight=style_weight, 
+                        content_weight=content_weight, 
+                        verbose=False,
+                        pbar=st_pbar
+                    )
+                    
+                    # Calculate output path
+                    rel_path = content_path.relative_to(input_dir)
+                    output_file = Path(output_dir) / rel_path
+                    
+                    # Save the result
+                    save_generated_image(output_img, output_file)
+                    
+                    # Add entry to the CSV file
+                    csv_writer.writerow([
+                        str(output_file), 
+                        str(content_path),
+                        str(style_path)
+                    ])
+                    
+                except Exception as e:
+                    print(f"Error processing {content_path}: {e}")
                 
-                # Save the result
-                save_generated_image(output_img, output_file)
-                
-            except Exception as e:
-                print(f"Error processing {content_path}: {e}")
-            
-            finally:
-                st_pbar.close()
-                pbar.update(1)
+                finally:
+                    st_pbar.close()
+                    pbar.update(1)
+    
+    print(f"Style-content mapping saved to {csv_path}")
 
 def main():
     """Main function to run the style transfer"""
