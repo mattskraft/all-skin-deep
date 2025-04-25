@@ -5,13 +5,14 @@ import argparse
 import numpy as np
 from pathlib import Path
 from sklearn.model_selection import train_test_split
+from config import VAL_SIZE
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Combine original and style-transferred datasets')
     parser.add_argument('--original_dir', type=str, required=True, help='Path to original balanced dataset')
     parser.add_argument('--st_dir', type=str, required=True, help='Path to style-transferred dataset')
     parser.add_argument('--output_dir', type=str, required=True, help='Path to output combined dataset')
-    parser.add_argument('--train_ratio', type=float, default=0.85, help='Ratio of training data (default: 0.85)')
+    parser.add_argument('--val_ratio', type=float, default=VAL_SIZE, help='Ratio of validation data')
     parser.add_argument('--random_seed', type=int, default=42, help='Random seed for reproducibility')
     return parser.parse_args()
 
@@ -34,7 +35,7 @@ def create_directory_structure(base_dir):
     
     print(f"Created directory structure at {base_dir}")
 
-def process_class(class_name, original_dir, st_dir, output_dir, train_ratio, random_seed):
+def process_class(class_name, original_dir, st_dir, output_dir, val_ratio, random_seed):
     """Process a single class combining original and ST images"""
     print(f"\nProcessing class: {class_name}")
     
@@ -98,8 +99,8 @@ def process_class(class_name, original_dir, st_dir, output_dir, train_ratio, ran
     
     # Split into train and validation
     random.seed(random_seed)  # Reset seed for consistent splits
-    first_half_train, first_half_val = train_test_split(first_half, train_size=train_ratio, random_state=random_seed)
-    second_half_train, second_half_val = train_test_split(second_half, train_size=train_ratio, random_state=random_seed)
+    first_half_train, first_half_val = train_test_split(first_half, test_size=val_ratio, random_state=random_seed)
+    second_half_train, second_half_val = train_test_split(second_half, test_size=val_ratio, random_state=random_seed)
     
     # Create class directories
     for half in ['first_half', 'second_half']:
@@ -151,7 +152,7 @@ def main(args):
             args.original_dir, 
             args.st_dir, 
             args.output_dir, 
-            args.train_ratio, 
+            args.val_ratio, 
             args.random_seed
         )
         if class_stats:

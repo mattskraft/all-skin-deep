@@ -8,6 +8,9 @@ LEARNING_RATE_1 = 0.0005
 LEARNING_RATE_2 = 0.0001
 OVERSAMPLE_FACTOR = 4
 NUM_EPOCHS = 40
+TEST_SIZE = 0.15
+VAL_SIZE = 0.1765 # 15/85 split of 85%
+NUM_CLASSES = 7
 
 PROJECT_DIR = Path(__file__).resolve().parent.absolute()
 DATA_DIR = PROJECT_DIR / "data"
@@ -20,7 +23,7 @@ MODEL_DIR = PROJECT_DIR / "models"
 PLOT_DIR = PROJECT_DIR / "plots"
 
 '''
-Based solely on the number of images per class, the class weights are:
+Based solely on the number of images per class, the class weights would be:
 
 akiec: 1.076
 bcc: 0.898

@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split
 import shutil
 from pathlib import Path
 import argparse
+from config import VAL_SIZE
 
 '''
 python prepare_datasets_1.py \
@@ -132,7 +133,7 @@ def main(args):
     # (because 70/85 ≈ 82.35% and 15/85 ≈ 17.65%)
     unbalanced_train_df, unbalanced_val_df = train_test_split(
         train_val_df, 
-        test_size=0.1765, 
+        test_size=VAL_SIZE, 
         stratify=train_val_df['dx'], 
         random_state=args.random_state
     )
