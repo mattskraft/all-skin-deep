@@ -1,17 +1,26 @@
+"""
+Configuration parameters for skin lesion classification model training.
 
+This module centralizes all configuration parameters used across the project,
+including model hyperparameters, directory paths, and class-specific weights.
+"""
 from pathlib import Path
 
+# Model hyperparameters
 BLOCKS_TO_UNFREEZE = ['block_16']
 BATCH_SIZE = 32
 IMAGE_SIZE = 224
-LEARNING_RATE_1 = 0.0005
-LEARNING_RATE_2 = 0.0001
+LEARNING_RATE_1 = 0.0005  # Initial fine-tuning learning rate
+LEARNING_RATE_2 = 0.0001  # Cross-style fine-tuning learning rate
 OVERSAMPLE_FACTOR = 4
 NUM_EPOCHS = 40
-TEST_SIZE = 0.15
-VAL_SIZE = 0.1765 # 15/85 split of 85%
 NUM_CLASSES = 7
 
+# Dataset splitting parameters
+TEST_SIZE = 0.15
+VAL_SIZE = 0.1765  # 15/85 split of 85%
+
+# Directory structure
 PROJECT_DIR = Path(__file__).resolve().parent.absolute()
 DATA_DIR = PROJECT_DIR / "data"
 TEST_DIR = DATA_DIR / "dataset_test" / "test"
@@ -22,6 +31,18 @@ VAL_2_DIR = DATA_DIR / "dataset_stage2" / "validation"
 MODEL_DIR = PROJECT_DIR / "models"
 PLOT_DIR = PROJECT_DIR / "plots"
 
+# Class names mapping (for easier reference)
+CLASS_NAMES = {
+    0: 'akiec',
+    1: 'bcc',
+    2: 'bkl',
+    3: 'df',
+    4: 'mel',
+    5: 'nv',
+    6: 'vasc'
+}
+
+# Class weights for loss function
 '''
 Based solely on the number of images per class, the class weights would be:
 
@@ -35,28 +56,17 @@ vasc: 1.640
 
 After some experimentation, I found that the following class weights work well:
 '''
-# CLASS_WEIGHTS = {
-#     'akiec': 1.5,
-#     'bcc': 1.0,
-#     'bkl': 1.0,
-#     'df': 2.5,
-#     'mel': 2.0,
-#     'nv': 0.2,
-#     'vasc': 2.0
-# }
 CLASS_WEIGHTS = {
-    0: 1.5,
-    1: 1.0,
-    2: 1.0,
-    3: 2.5,
-    4: 2.0,
-    5: 0.2,
-    6: 2.0
+    0: 1.5,  # akiec
+    1: 1.0,  # bcc
+    2: 1.0,  # bkl
+    3: 2.5,  # df
+    4: 2.0,  # mel
+    5: 0.2,  # nv
+    6: 2.0   # vasc
 }
 
-'''
-The same holds for the class multiplying factors for the oversampling:
-'''
+# Oversampling multipliers to handle class imbalance
 CLASS_MULTIPLIERS = {
     'akiec': 4,
     'bcc': 2,
