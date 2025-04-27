@@ -1,73 +1,98 @@
-from model_utils import (
-    create_regular_generator,
-    make_callbacks_list,
-    save_training_artifacts,
-    load_model_from_path,
-    compile_model
-)
-from config import (
-    TRAIN_2_DIR,
-    VAL_2_DIR,
-    MODEL_DIR,
-    NUM_EPOCHS,
-    LEARNING_RATE_2
-)
+#!/usr/bin/env python
+"""
+Cross-style fine-tuning script for skin lesion classification.
 
-# Load the best model from the first fine-tuning stage
-# This model was saved by the ModelCheckpoint callback based on best validation F1-macro
-model_path = MODEL_DIR / "finetune_orig_best.h5"
-print(f"Loading pre-trained model from {model_path}")
-model = load_model_from_path(model_path)
+This script performs cross-training between two halves of the dataset, where each half
+contains a mix of original and style-transferred images. It loads a pre-trained model
+from the first fine-tuning stage and trains it on each half, validating on the other.
+This approach helps the model become more robust to different image styles.
+"""
 
-# Recompile the model with a lower learning rate for fine-tuning
-# This preserves the model architecture and weights but updates the optimizer
-print(f"\nCompiling model with learning rate {LEARNING_RATE_2}")
-compile_model(model, LEARNING_RATE_2)
+import argparse
+from pathlib import Path
+import config as cfg
+import model_utils as utils
 
-# Cross-style training on two different dataset halves
-# Each half contains a mix of original and style-transferred images
-for i, half in enumerate(["first_half", "second_half"]):
+def parse_args():
+    parser = argparse.ArgumentParser(description="Cross-style fine-tuning of a pre-trained model")
     
-    # Each half has its own training and validation directories
-    # This allows for cross-validation between the two halves
-    train_dir = TRAIN_2_DIR / half
-    val_dir = VAL_2_DIR / half
+    # Load defaults from config module
+    parser.add_argument("--train_dir", type=str, default=cfg.TRAIN_2_DIR,
+                        help=f"Training directory (default: {cfg.TRAIN_2_DIR})")
+    parser.add_argument("--val_dir", type=str, default=cfg.VAL_2_DIR,
+                        help=f"Validation directory (default: {cfg.VAL_2_DIR})")
+    parser.add_argument("--model_dir", type=str, default=cfg.MODEL_DIR,
+                        help=f"Model directory (default: {cfg.MODEL_DIR})")
+    parser.add_argument("--learning_rate", type=float, default=cfg.LEARNING_RATE_2,
+                        help=f"Learning rate (default: {cfg.LEARNING_RATE_2})")
+    parser.add_argument("--epochs", type=int, default=cfg.NUM_EPOCHS,
+                        help=f"Number of epochs (default: {cfg.NUM_EPOCHS})")
+    parser.add_argument("--base_model", type=str, default="finetune_orig_best.h5",
+                        help="Base model to load (default: finetune_orig_best.h5)")
+    parser.add_argument("--output_prefix", type=str, default="finetune_cross",
+                        help="Prefix for output files (default: finetune_cross)")
     
-    print(f"\nRound {i+1}: Training on {train_dir}, validating on {val_dir}")
+    return parser.parse_args()
+
+def main(args):
+    # Convert string paths to Path objects
+    train_dir = Path(args.train_dir)
+    val_dir = Path(args.val_dir)
+    model_dir = Path(args.model_dir)
+    output_prefix = args.output_prefix
     
-    # Create data generators for this round
-    # Training data uses augmentation and shuffling for robustness
-    train_generator = create_regular_generator(train_dir, with_augment=True, shuffle=True)
-    # Validation data has no augmentation or shuffling for consistent evaluation
-    val_generator = create_regular_generator(val_dir, with_augment=False, shuffle=False)
+    # Load the best model from the first fine-tuning stage
+    model_path = model_dir / args.base_model
+    print(f"Loading pre-trained model from {model_path}")
+    model = utils.load_model_from_path(model_path)
     
-    # Create fresh callbacks for this round with a unique best model path
-    # The ModelCheckpoint in these callbacks will save the best model based on validation F1-macro
-    model_save_path = MODEL_DIR / f"finetune_cross_{i+1}_best.h5"
-    callbacks_list = make_callbacks_list(model_save_path, val_generator)
+    # Recompile the model with a lower learning rate for fine-tuning
+    print(f"\nCompiling model with learning rate {args.learning_rate}")
+    utils.compile_model(model, args.learning_rate)
+    
+    # Cross-style training on two different dataset halves
+    for i, half in enumerate(["first_half", "second_half"]):
+        
+        # Each half has its own training and validation directories
+        half_train_dir = train_dir / half
+        half_val_dir = val_dir / half
+        
+        print(f"\nRound {i+1}: Training on {half_train_dir}, validating on {half_val_dir}")
+        
+        # Create data generators for this round
+        train_generator = utils.create_regular_generator(half_train_dir, with_augment=True, shuffle=True)
+        val_generator = utils.create_regular_generator(half_val_dir, with_augment=False, shuffle=False)
+        
+        # Create fresh callbacks for this round with a unique best model path
+        model_save_path = model_dir / f"{output_prefix}_{i+1}_best.h5"
+        callbacks_list = utils.make_callbacks_list(model_save_path, val_generator)
+        
+        print(f"\nStarting fine-tuning (Round {i+1} of 2)...")
+        print(f"Training on {len(train_generator.filenames)} images")
+        print(f"Validating on {len(val_generator.filenames)} images")
+        print(f"Training for {args.epochs} epochs")
+        
+        # Train the model for this round
+        history = model.fit(
+            train_generator,
+            validation_data=val_generator,
+            steps_per_epoch=len(train_generator),
+            validation_steps=len(val_generator),
+            epochs=args.epochs,
+            callbacks=callbacks_list,
+            verbose=1
+        )
+        
+        # Save training artifacts (history and optional metrics)
+        print(f"\nSaving training artifacts for round {i+1}...")
+        utils.save_training_artifacts(history, model_dir, f"{output_prefix}_round_{i+1}")
+        print("Training artifacts saved successfully.")
+    
+    print("\nCross-style fine-tuning completed.")
+    print("Best models saved to:")
+    for i in range(2):
+        print(f"  - {model_dir}/{output_prefix}_{i+1}_best.h5")
 
-    print(f"\nStarting fine-tuning (Round {i+1} of 2)...")
-    print(f"Training on {len(train_generator.filenames)} images")
-    print(f"Validating on {len(val_generator.filenames)} images")
-
-    # Train the model for this round
-    history = model.fit(
-        train_generator,
-        validation_data=val_generator,
-        steps_per_epoch=len(train_generator),
-        validation_steps=len(val_generator),
-        epochs=NUM_EPOCHS,
-        callbacks=callbacks_list,
-        verbose=1
-    )
-
-    # Save training artifacts (history and optional metrics)
-    # Note: The best model is already saved by the ModelCheckpoint callback
-    print(f"\nSaving training artifacts for round {i+1}...")
-    save_training_artifacts(history, MODEL_DIR, f"finetune_cross_round_{i+1}")
-    print("Training artifacts saved successfully.")
-
-print("\nCross-style fine-tuning completed.")
-print(f"Best models saved to:")
-print(f"  - {MODEL_DIR}/finetune_cross_1_best.h5")
-print(f"  - {MODEL_DIR}/finetune_cross_2_best.h5")
+if __name__ == "__main__":
+    args = parse_args()
+    main(args)
