@@ -5,18 +5,14 @@ Main script for processing images using neural style transfer
 import torch
 from torchvision.models import vgg19, VGG19_Weights
 from pathlib import Path
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 import argparse
 import random
-import csv
-from nst_utils import (
-    device, image_loader, get_all_images, save_generated_image, run_style_transfer
-)
+import nst_utils as utils
 
 # Set default device
-torch.set_default_device(device)
+torch.set_default_device(utils.device)
 
-# Function to process an entire directory
 def process_directory(input_dir, output_dir, style_dir, num_steps=1000, 
                      style_weight=1000000, content_weight=1):
     """
@@ -34,88 +30,59 @@ def process_directory(input_dir, output_dir, style_dir, num_steps=1000,
     # Load VGG19 model
     cnn = vgg19(weights=VGG19_Weights.DEFAULT).features.eval()
     
-    # Get all style images
-    style_images = get_all_images(style_dir)
+    # Get all style and content images
+    style_images = utils.get_all_images(style_dir)
+    content_images = utils.get_all_images(input_dir)
+    
+    # Validate image collections
     if not style_images:
         raise FileNotFoundError(f"No style images found in {style_dir}")
-    
-    # Get all content images
-    content_images = get_all_images(input_dir)
     if not content_images:
         raise FileNotFoundError(f"No content images found in {input_dir}")
     
     print(f"Found {len(content_images)} content images and {len(style_images)} style images")
     
     # Create output directory structure mirroring input
-    for img_path in content_images:
-        # Calculate relative path from input_dir
-        rel_path = img_path.relative_to(input_dir)
-        # Create corresponding output directory
-        output_path = Path(output_dir) / rel_path.parent
-        output_path.mkdir(parents=True, exist_ok=True)
+    utils.create_output_directories(input_dir, output_dir, content_images)
     
-    # Create CSV file to track style-content pairs
+    # Prepare CSV file for tracking style-content pairs
     csv_path = Path(output_dir) / "style_content_mapping.csv"
-    with open(csv_path, 'w', newline='') as csvfile:
-        csv_writer = csv.writer(csvfile)
-        # Write header
-        csv_writer.writerow(['generated_image', 'content_image', 'style_image'])
-        
-        # Process each content image with a randomly selected style image
-        with tqdm(total=len(content_images), desc=f"Processing {input_dir.name}") as pbar:
-            for content_path in content_images:
-                # Select random style image
-                style_path = random.choice(style_images)
-                
-                # Load images
-                content_img, _ = image_loader(content_path)
-                style_img, _ = image_loader(style_path)
-                
-                # Create input image (initially a copy of content image)
-                input_img = content_img.clone()
-                
-                # Create style transfer progress bar (nested)
-                st_pbar = tqdm(
-                    total=num_steps, 
-                    desc=f"Style transferring {content_path.name}", 
-                    leave=False
-                )
-                
-                # Run style transfer
-                try:
-                    output_img = run_style_transfer(
-                        cnn,
-                        content_img,
-                        style_img,
-                        input_img, 
-                        num_steps=num_steps,
-                        style_weight=style_weight, 
-                        content_weight=content_weight, 
-                        verbose=False,
-                        pbar=st_pbar
-                    )
-                    
-                    # Calculate output path
-                    rel_path = content_path.relative_to(input_dir)
-                    output_file = Path(output_dir) / rel_path
-                    
-                    # Save the result
-                    save_generated_image(output_img, output_file)
-                    
-                    # Add entry to the CSV file
-                    csv_writer.writerow([
-                        str(output_file), 
-                        str(content_path),
-                        str(style_path)
-                    ])
-                    
-                except Exception as e:
-                    print(f"Error processing {content_path}: {e}")
-                
-                finally:
-                    st_pbar.close()
-                    pbar.update(1)
+    csv_data = [['generated_image', 'content_image', 'style_image']]  # Header row
     
+    # Process each content image with a randomly selected style image
+    with tqdm(total=len(content_images), desc=f"Processing {input_dir.name}") as pbar:
+        for content_path in content_images:
+            # Select random style image
+            style_path = random.choice(style_images)
+            
+            # Get output path
+            rel_path = content_path.relative_to(input_dir)
+            output_file = Path(output_dir) / rel_path
+            
+            # Process individual image pair
+            success = utils.process_image_pair(
+                cnn, 
+                content_path, 
+                style_path, 
+                output_file,
+                num_steps=num_steps,
+                style_weight=style_weight,
+                content_weight=content_weight,
+                pbar=pbar
+            )
+            
+            # Record successful transfers
+            if success:
+                csv_data.append([
+                    str(output_file), 
+                    str(content_path),
+                    str(style_path)
+                ])
+                
+            pbar.update(1)
+    
+    # Write data to CSV
+    utils.write_csv(csv_path, csv_data)
     print(f"Style-content mapping saved to {csv_path}")
 
 def main():
@@ -137,7 +104,7 @@ def main():
     args = parser.parse_args()
     
     # Check for GPU
-    print(f"Using device: {device}")
+    print(f"Using device: {utils.device}")
     
     # Handle paths
     content_path = Path(args.content)

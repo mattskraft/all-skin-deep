@@ -10,6 +10,7 @@ from PIL import Image
 import numpy as np
 import torchvision.transforms as transforms
 from pathlib import Path
+from tqdm import tqdm
 
 # Define device for computation
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -338,3 +339,89 @@ def get_all_images(directory, extensions={".jpg", ".jpeg", ".png"}):
     for ext in extensions:
         image_paths.extend(Path(directory).rglob(f"*{ext}"))
     return image_paths
+
+def create_output_directories(input_dir, output_dir, content_images):
+    """
+    Create output directory structure mirroring the input directory.
+    
+    Args:
+        input_dir: Base input directory
+        output_dir: Base output directory
+        content_images: List of image paths to process
+    """
+    for img_path in content_images:
+        # Calculate relative path from input_dir
+        rel_path = img_path.relative_to(input_dir)
+        # Create corresponding output directory
+        output_path = Path(output_dir) / rel_path.parent
+        output_path.mkdir(parents=True, exist_ok=True)
+
+def process_image_pair(cnn, content_path, style_path, output_file, 
+                       num_steps=1000, style_weight=1000000, 
+                       content_weight=1, pbar=None):
+    """
+    Process a single content-style image pair using neural style transfer.
+    
+    Args:
+        cnn: Pre-trained CNN model
+        content_path: Path to content image
+        style_path: Path to style image
+        output_file: Path to save the generated image
+        num_steps: Number of optimization steps
+        style_weight: Weight for style loss
+        content_weight: Weight for content loss
+        pbar: Optional progress bar for overall processing
+    
+    Returns:
+        bool: True if processing was successful, False otherwise
+    """
+    try:
+        # Load images
+        content_img, _ = image_loader(content_path)
+        style_img, _ = image_loader(style_path)
+        
+        # Create input image (initially a copy of content image)
+        input_img = content_img.clone()
+        
+        # Create style transfer progress bar (nested)
+        st_pbar = tqdm(
+            total=num_steps, 
+            desc=f"Style transferring {content_path.name}", 
+            leave=False
+        )
+        
+        # Run style transfer
+        output_img = run_style_transfer(
+            cnn,
+            content_img,
+            style_img,
+            input_img, 
+            num_steps=num_steps,
+            style_weight=style_weight, 
+            content_weight=content_weight, 
+            verbose=False,
+            pbar=st_pbar
+        )
+        
+        # Save the result
+        save_generated_image(output_img, output_file)
+        
+        st_pbar.close()
+        return True
+        
+    except Exception as e:
+        print(f"Error processing {content_path}: {e}")
+        return False
+
+def write_csv(csv_path, data):
+    """
+    Write data to a CSV file.
+    
+    Args:
+        csv_path: Path to the CSV file
+        data: List of rows to write
+    """
+    with open(csv_path, 'w', newline='') as csvfile:
+        csv_writer = csv.writer(csvfile)
+        for row in data:
+            csv_writer.writerow(row)
