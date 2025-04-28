@@ -216,6 +216,18 @@ pip install -r requirements.txt
 
 ---
 
+## Acknowledgments
+
+This project was inspired and guided by the following works:
+
+- [Skin Lesion Analyzer + TensorFlow.js Web App](https://www.kaggle.com/code/vbookshelf/skin-lesion-analyzer-tensorflow-js-web-app)  
+  Motivation for using a lightweight CNN architecture (MobileNetV2) with a focus on data privacy
+
+- [Improving Skin Color Diversity in Cancer Detection: Deep Learning Approach](https://pmc.ncbi.nlm.nih.gov/articles/PMC10334920/)  
+  Inspiration for applying Neural Style Transfer (NST) for dataset augmentation, and for evaluating image quality using SSIM and BRISQUE.
+
+---
+
 ## License
 
 MIT License
