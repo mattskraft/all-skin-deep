@@ -18,6 +18,7 @@ This repository contains the code and workflows for preparing a skin lesion data
   - [Prepare Final Combined Dataset](#prepare-final-combined-dataset)
   - [Fine-Tune the Model](#fine-tune-the-model)
   - [Evaluate Model Performance](#evaluate-model-performance)
+- [Web Demo](#web-app-demo)
 - [Requirements](#requirements)
 - [Notes](#notes)
 - [License](#license)
@@ -44,9 +45,9 @@ This repository contains the code and workflows for preparing a skin lesion data
 │   │   ├── finetune_cross.py
 │   │   ├── model_utils.py
 │   ├── config.py
-└── outputs/             # trained models, evaluation results
+└── outputs/
     ├── plots/
-    └── models/
+    └── models/         # training history, trained models
 ```
 
 ## Workflow
@@ -178,6 +179,17 @@ notebooks/03_eval_model_on_testset.ipynb
     - Confusion matrix
     - Class-wise and macro F1 scores
     - Class-wise and top-3 classification accuracies
+
+---
+
+## Web APP Demo
+
+A live interactive demo of the final model is available:
+
+👉 [Try the Skin Lesion Classifier in your browser](https://precious-haupia-39d814.netlify.app/)
+
+The model was converted to TensorFlowJS format and deployed as a static web app.  
+This allows real-time skin lesion predictions directly in the browser without needing a server.
 
 ---
 
