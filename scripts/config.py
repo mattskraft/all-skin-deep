@@ -22,16 +22,16 @@ VAL_SIZE = 0.1765  # 15/85 split of 85%
 
 # Directory structure
 PROJECT_DIR = Path(__file__).resolve().parent.absolute()
-DATA_DIR = PROJECT_DIR / "data"
+DATA_DIR = PROJECT_DIR / "data" / "processed"
 TEST_DIR = DATA_DIR / "dataset_test" / "test"
 TRAIN_1_DIR = DATA_DIR / "dataset_stage1" / "train"
 VAL_1_DIR = DATA_DIR / "dataset_stage1" / "val"
 TRAIN_2_DIR = DATA_DIR / "dataset_stage2" / "train"
-VAL_2_DIR = DATA_DIR / "dataset_stage2" / "validation"
-MODEL_DIR = PROJECT_DIR / "models"
-PLOT_DIR = PROJECT_DIR / "plots"
+VAL_2_DIR = DATA_DIR / "dataset_stage2" / "val"
+MODEL_DIR = PROJECT_DIR / "outputs" / "models"
+PLOT_DIR = PROJECT_DIR / "outputs" / "plots"
 
-# Class names mapping (for easier reference)
+# Class names mapping
 CLASS_NAMES = {
     0: 'akiec',
     1: 'bcc',

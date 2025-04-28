@@ -104,14 +104,14 @@ def process_class(class_name, original_dir, st_dir, output_dir, val_ratio, rando
     
     # Create class directories
     for half in ['first_half', 'second_half']:
-        for split in ['train', 'validation']:
+        for split in ['train', 'val']:
             os.makedirs(os.path.join(output_dir, split, half, class_name), exist_ok=True)
     
     # Copy files
     copy_files(first_half_train, os.path.join(output_dir, 'train', 'first_half', class_name))
-    copy_files(first_half_val, os.path.join(output_dir, 'validation', 'first_half', class_name))
+    copy_files(first_half_val, os.path.join(output_dir, 'val', 'first_half', class_name))
     copy_files(second_half_train, os.path.join(output_dir, 'train', 'second_half', class_name))
-    copy_files(second_half_val, os.path.join(output_dir, 'validation', 'second_half', class_name))
+    copy_files(second_half_val, os.path.join(output_dir, 'val', 'second_half', class_name))
     
     return {
         'class': class_name,
