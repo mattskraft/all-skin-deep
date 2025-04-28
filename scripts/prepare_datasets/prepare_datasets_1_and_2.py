@@ -7,14 +7,6 @@ from pathlib import Path
 import argparse
 from config import VAL_SIZE
 
-'''
-python prepare_datasets_1.py \
-  --input_dir ~/projects/all-skin-deep/data/raw/HAM10000/images \
-  --metadata ~/projects/all-skin-deep/data/raw/HAM10000/HAM10000_metadata_clean.csv \
-  --output_dir ~/projects/all-skin-deep/data/ \
-  --random_state 42
-'''
-
 def parse_args():
     parser = argparse.ArgumentParser(description='Prepare HAM10000 datasets for training')
     parser.add_argument('--input_dir', type=str, required=True, help='Path to original HAM10000 images')
