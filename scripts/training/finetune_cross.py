@@ -17,10 +17,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Cross-style fine-tuning of a pre-trained model")
     
     # Load defaults from config module
-    parser.add_argument("--train_dir", type=str, default=cfg.TRAIN_2_DIR,
-                        help=f"Training directory (default: {cfg.TRAIN_2_DIR})")
-    parser.add_argument("--val_dir", type=str, default=cfg.VAL_2_DIR,
-                        help=f"Validation directory (default: {cfg.VAL_2_DIR})")
+    parser.add_argument("--data_dir", type=str, default=cfg.TRAIN_2_DIR,
+                        help=f"Data directory (default: {cfg.TRAIN_2_DIR})")
     parser.add_argument("--model_dir", type=str, default=cfg.MODEL_DIR,
                         help=f"Model directory (default: {cfg.MODEL_DIR})")
     parser.add_argument("--learning_rate", type=float, default=cfg.LEARNING_RATE_2,
@@ -36,8 +34,7 @@ def parse_args():
 
 def main(args):
     # Convert string paths to Path objects
-    train_dir = Path(args.train_dir)
-    val_dir = Path(args.val_dir)
+    data_dir = Path(args.data_dir)
     model_dir = Path(args.model_dir)
     output_prefix = args.output_prefix
     
@@ -51,23 +48,27 @@ def main(args):
     utils.compile_model(model, args.learning_rate)
     
     # Cross-style training on two different dataset halves
-    for i, half in enumerate(["first_half", "second_half"]):
+    for idx in range(2):
         
-        # Each half has its own training and validation directories
-        half_train_dir = train_dir / half
-        half_val_dir = val_dir / half
+        # Train on one half, validate on the other
+        if i == 0:
+            train_dir = data_dir / "first_half"
+            val_dir = data_dir / "second_half"
+        else:
+            train_dir = data_dir / "second_half"
+            val_dir = data_dir / "first_half"
         
-        print(f"\nRound {i+1}: Training on {half_train_dir}, validating on {half_val_dir}")
+        print(f"\nRound {i+1}: Training on {train_dir}, validating on {val_dir}")
         
         # Create data generators for this round
-        train_generator = utils.create_regular_generator(half_train_dir, with_augment=True, shuffle=True)
-        val_generator = utils.create_regular_generator(half_val_dir, with_augment=False, shuffle=False)
+        train_generator = utils.create_regular_generator(train_dir, with_augment=True, shuffle=True)
+        val_generator = utils.create_regular_generator(val_dir, with_augment=False, shuffle=False)
         
         # Create fresh callbacks for this round with a unique best model path
-        model_save_path = model_dir / f"{output_prefix}_{i+1}_best.h5"
+        model_save_path = model_dir / f"{output_prefix}_{idx+1}_best.h5"
         callbacks_list = utils.make_callbacks_list(model_save_path, val_generator)
         
-        print(f"\nStarting fine-tuning (Round {i+1} of 2)...")
+        print(f"\nStarting fine-tuning (Round {idx+1} of 2)...")
         print(f"Training on {len(train_generator.filenames)} images")
         print(f"Validating on {len(val_generator.filenames)} images")
         print(f"Training for {args.epochs} epochs")
@@ -84,14 +85,14 @@ def main(args):
         )
         
         # Save training artifacts (history and optional metrics)
-        print(f"\nSaving training artifacts for round {i+1}...")
-        utils.save_training_artifacts(history, model_dir, f"{output_prefix}_round_{i+1}")
+        print(f"\nSaving training artifacts for round {idx+1}...")
+        utils.save_training_artifacts(history, model_dir, f"{output_prefix}_round_{idx+1}")
         print("Training artifacts saved successfully.")
     
     print("\nCross-style fine-tuning completed.")
     print("Best models saved to:")
     for i in range(2):
-        print(f"  - {model_dir}/{output_prefix}_{i+1}_best.h5")
+        print(f"  - {model_dir}/{output_prefix}_{idx+1}_best.h5")
 
 if __name__ == "__main__":
     args = parse_args()
