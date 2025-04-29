@@ -1,6 +1,7 @@
 """
 Neural Style Transfer for Dataset Generation
-Main script for processing images using neural style transfer
+
+This script does batch processing of images using neural style transfer. 
 """
 import torch
 from torchvision.models import vgg19, VGG19_Weights

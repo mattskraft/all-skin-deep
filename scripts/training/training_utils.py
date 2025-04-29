@@ -12,14 +12,8 @@ import numpy as np
 from pathlib import Path
 import pandas as pd
 import os
-from config import (
-    OVERSAMPLE_FACTOR,
-    BATCH_SIZE,
-    CLASS_MULTIPLIERS,
-    BLOCKS_TO_UNFREEZE,
-    IMAGE_SIZE,
-    CLASS_WEIGHTS
-)
+import config as cfg
+
 
 def top_3_accuracy(y_true, y_pred):
     """
@@ -35,7 +29,7 @@ def top_3_accuracy(y_true, y_pred):
     return top_k_categorical_accuracy(y_true, y_pred, k=3)
 
 
-def weighted_focal_loss(gamma=2.0, class_weights=CLASS_WEIGHTS):
+def weighted_focal_loss(gamma=2.0, class_weights=cfg.CLASS_WEIGHTS):
     """
     Create a weighted focal loss function for handling class imbalance.
     
@@ -99,7 +93,7 @@ def build_model(num_classes, weights='imagenet'):
     base_model = MobileNetV2(
         weights=weights,  # 'imagenet' or None
         include_top=False,
-        input_shape=(IMAGE_SIZE, IMAGE_SIZE, 3)
+        input_shape=(cfg.IMAGE_SIZE, cfg.IMAGE_SIZE, 3)
     )
 
     # Freeze all layers
@@ -108,7 +102,7 @@ def build_model(num_classes, weights='imagenet'):
 
     # Unfreeze selected blocks
     for layer in base_model.layers:
-        if any(block in layer.name for block in BLOCKS_TO_UNFREEZE):
+        if any(block in layer.name for block in cfg.BLOCKS_TO_UNFREEZE):
             layer.trainable = True
 
     # Add classification head
@@ -122,7 +116,7 @@ def build_model(num_classes, weights='imagenet'):
     model = Model(inputs=base_model.input, outputs=predictions)
 
     # Print unfreezing information
-    print(f"\nUnfreezing blocks: {', '.join(BLOCKS_TO_UNFREEZE)}")
+    print(f"\nUnfreezing blocks: {', '.join(cfg.BLOCKS_TO_UNFREEZE)}")
     # Count trainable vs non-trainable parameters
     trainable_params = sum([K.count_params(w) for w in model.trainable_weights])
     non_trainable_params = sum([K.count_params(w) for w in model.non_trainable_weights])
@@ -146,8 +140,8 @@ def compile_model(model, learning_rate=0.001):
     """
     return model.compile(
         optimizer=Adam(learning_rate=learning_rate),
-        loss=get_loss_function(class_weights=CLASS_WEIGHTS),
-        metrics=[categorical_accuracy, top_3_accuracy, F1MacroScore(num_classes=len(CLASS_WEIGHTS))]
+        loss=get_loss_function(class_weights=cfg.CLASS_WEIGHTS),
+        metrics=[categorical_accuracy, top_3_accuracy, F1MacroScore(num_classes=len(cfg.CLASS_WEIGHTS))]
 )
 
 
@@ -328,7 +322,7 @@ def load_model_from_path(model_path):
     """
     print(f"Loading model from {model_path}")
     custom_objects = CUSTOM_OBJECTS.copy()
-    custom_objects['focal_loss'] = get_loss_function(class_weights=CLASS_WEIGHTS)
+    custom_objects['focal_loss'] = get_loss_function(class_weights=cfg.CLASS_WEIGHTS)
     return load_model(model_path, custom_objects=custom_objects, compile=False)
 
 
@@ -402,7 +396,7 @@ datagen_only_preproc = ImageDataGenerator(
 )
 
 
-def create_regular_generator(dir, with_augment=False, shuffle=False, batch_size=BATCH_SIZE):
+def create_regular_generator(dir, with_augment=False, shuffle=False, batch_size=cfg.BATCH_SIZE):
     """
     Create a data generator from directory with optional augmentation.
     
@@ -418,7 +412,7 @@ def create_regular_generator(dir, with_augment=False, shuffle=False, batch_size=
     generator=datagen_with_augment if with_augment else datagen_only_preproc
     return generator.flow_from_directory(
         dir,
-        target_size=(IMAGE_SIZE, IMAGE_SIZE),
+        target_size=(cfg.IMAGE_SIZE, cfg.IMAGE_SIZE),
         batch_size=batch_size,
         class_mode='categorical',
         shuffle=shuffle,
@@ -427,7 +421,7 @@ def create_regular_generator(dir, with_augment=False, shuffle=False, batch_size=
 
 
 def create_weighted_generator(dir, with_augment=True, shuffle=True,
-                              batch_size=BATCH_SIZE, class_multipliers=CLASS_MULTIPLIERS):
+                              batch_size=cfg.BATCH_SIZE, class_multipliers=cfg.CLASS_MULTIPLIERS):
     """
     Creates a weighted generator with oversampling based on class weights.
     
@@ -445,14 +439,14 @@ def create_weighted_generator(dir, with_augment=True, shuffle=True,
         tuple: (generator, steps_per_epoch) - the data generator and calculated steps per epoch
     """
     # regular generator
-    gen = create_regular_generator(dir, with_augment, shuffle, batch_size*OVERSAMPLE_FACTOR)
+    gen = create_regular_generator(dir, with_augment, shuffle, batch_size*cfg.OVERSAMPLE_FACTOR)
 
     # Calculate steps_per_epoch
     total_original_images = sum(
         len([f for f in os.listdir(os.path.join(dir, class_name)) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
         for class_name in class_multipliers
     )
-    steps_per_epoch = int(total_original_images / batch_size * OVERSAMPLE_FACTOR)
+    steps_per_epoch = int(total_original_images / batch_size * cfg.OVERSAMPLE_FACTOR)
 
     # Get class indices
     class_indices = gen.class_indices
@@ -491,13 +485,13 @@ def create_weighted_generator(dir, with_augment=True, shuffle=True,
     return tf.data.Dataset.from_generator(
         weighted_generator,
         output_signature=(
-            tf.TensorSpec(shape=(None, IMAGE_SIZE, IMAGE_SIZE, 3), dtype=tf.float32),
+            tf.TensorSpec(shape=(None, cfg.IMAGE_SIZE, cfg.IMAGE_SIZE, 3), dtype=tf.float32),
             tf.TensorSpec(shape=(None, len(class_indices)), dtype=tf.float32)
         )
     ), steps_per_epoch
 
 
-def save_training_artifacts(history, model_dir, model_name):
+def save_training_artifacts(history, history_path):
     """
     Saves training history and optional class-level metrics to disk.
     
@@ -506,34 +500,15 @@ def save_training_artifacts(history, model_dir, model_name):
         model_dir: Directory to save artifacts (can be Path or str)
         model_name: Base name for saved files (no extension)
     """
-    model_dir = Path(model_dir)
+    history_dir = Path(history_path).parent
 
     try:
-        model_dir.mkdir(parents=True, exist_ok=True)
-        print(f"Created folder: {model_dir}")
+        history_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Created folder: {history_dir}")
     except Exception as e:
         print(f"Error creating folder: {e}")
 
     # Save training history as CSV
     history_df = pd.DataFrame(history.history)
-    history_path = model_dir / f"{model_name}_history.csv"
     history_df.to_csv(history_path, index=False)
     print(f"Training history saved to {history_path}")
-
-    # Save optional class-level metrics (if available)
-    if hasattr(history, "class_metrics_history"):
-        class_metrics = history.class_metrics_history
-        if isinstance(class_metrics, dict):
-            class_df = pd.DataFrame(class_metrics)
-        else:
-            try:
-                class_df = pd.DataFrame.from_records(class_metrics)
-            except Exception:
-                print("⚠️ Could not convert class_metrics_history to DataFrame.")
-                return
-
-        class_metrics_path = model_dir / f"{model_name}_class_metrics.csv"
-        class_df.to_csv(class_metrics_path, index=False)
-        print(f"Class metrics saved to {class_metrics_path}")
-    else:
-        print("No class_metrics_history found in history.")

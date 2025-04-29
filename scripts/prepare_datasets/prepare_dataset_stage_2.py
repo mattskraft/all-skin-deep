@@ -1,18 +1,25 @@
+"""
+Prepare Dataset for Stage 2 Training
+
+Prepare dataset for cross-style training by combining original and style-transferred images.
+This script creates a directory structure for the combined dataset, processes each class,
+and splits the images into two halves for cross-training. Each half contains a mix of
+original and style-transferred images. The script also handles missing style-transferred
+images and ensures that the dataset is balanced across classes.
+"""
+
 import os
 import random
 import shutil
 import argparse
 import numpy as np
 from pathlib import Path
-from sklearn.model_selection import train_test_split
-from config import VAL_SIZE
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Combine original and style-transferred datasets')
     parser.add_argument('--original_dir', type=str, required=True, help='Path to original balanced dataset')
     parser.add_argument('--st_dir', type=str, required=True, help='Path to style-transferred dataset')
     parser.add_argument('--output_dir', type=str, required=True, help='Path to output combined dataset')
-    parser.add_argument('--val_ratio', type=float, default=VAL_SIZE, help='Ratio of validation data')
     parser.add_argument('--random_seed', type=int, default=42, help='Random seed for reproducibility')
     return parser.parse_args()
 
@@ -29,13 +36,12 @@ def get_image_files(directory):
 def create_directory_structure(base_dir):
     """Create the directory structure for the combined dataset"""
     for half in ['first_half', 'second_half']:
-        for split in ['train', 'validation']:
-            half_dir = os.path.join(base_dir, split, half)
-            os.makedirs(half_dir, exist_ok=True)
+        half_dir = os.path.join(base_dir, half)
+        os.makedirs(half_dir, exist_ok=True)
     
     print(f"Created directory structure at {base_dir}")
 
-def process_class(class_name, original_dir, st_dir, output_dir, val_ratio, random_seed):
+def process_class(class_name, original_dir, st_dir, output_dir, random_seed):
     """Process a single class combining original and ST images"""
     print(f"\nProcessing class: {class_name}")
     
@@ -65,6 +71,30 @@ def process_class(class_name, original_dir, st_dir, output_dir, val_ratio, rando
     if missing_files:
         print(f"Note: {len(missing_files)} images missing from style-transferred dataset")
     
+    # Mix shuffled files and split into two halves
+    first_half, second_half = mix_and_split_files(
+        common_files, missing_files, original_class_dir, st_class_dir, random_seed
+    )
+    
+    # Create class directories
+    for half in ['first_half', 'second_half']:
+        os.makedirs(os.path.join(output_dir, half, class_name), exist_ok=True)
+    
+    # Copy files
+    copy_files(first_half, os.path.join(output_dir, 'first_half', class_name))
+    copy_files(second_half, os.path.join(output_dir, 'second_half', class_name))
+        
+    return {
+        'class': class_name,
+        'total_original': len(original_files),
+        'total_st': len(st_files),
+        'missing_st': len(missing_files),
+        'first_half': len(first_half),
+        'second_half': len(second_half)
+    }
+
+def mix_and_split_files(common_files, missing_files, original_class_dir, st_class_dir, random_seed):
+    
     # Shuffle files with fixed random seed for reproducibility
     random.seed(random_seed)
     random.shuffle(common_files)
@@ -93,38 +123,11 @@ def process_class(class_name, original_dir, st_dir, output_dir, val_ratio, rando
     second_half_st_paths = [(os.path.join(st_class_dir, f), f) for f in second_half_st]
     second_half_orig_paths = [(os.path.join(original_class_dir, f), f) for f in second_half_orig]
     second_half = second_half_st_paths + second_half_orig_paths
-    
+
     print(f"First half: {len(first_half)} images ({len(first_half_st)} ST, {len(first_half_orig)} original)")
     print(f"Second half: {len(second_half)} images ({len(second_half_st)} ST, {len(second_half_orig)} original)")
-    
-    # Split into train and validation
-    random.seed(random_seed)  # Reset seed for consistent splits
-    first_half_train, first_half_val = train_test_split(first_half, test_size=val_ratio, random_state=random_seed)
-    second_half_train, second_half_val = train_test_split(second_half, test_size=val_ratio, random_state=random_seed)
-    
-    # Create class directories
-    for half in ['first_half', 'second_half']:
-        for split in ['train', 'val']:
-            os.makedirs(os.path.join(output_dir, split, half, class_name), exist_ok=True)
-    
-    # Copy files
-    copy_files(first_half_train, os.path.join(output_dir, 'train', 'first_half', class_name))
-    copy_files(first_half_val, os.path.join(output_dir, 'val', 'first_half', class_name))
-    copy_files(second_half_train, os.path.join(output_dir, 'train', 'second_half', class_name))
-    copy_files(second_half_val, os.path.join(output_dir, 'val', 'second_half', class_name))
-    
-    return {
-        'class': class_name,
-        'total_original': len(original_files),
-        'total_st': len(st_files),
-        'missing_st': len(missing_files),
-        'first_half_total': len(first_half),
-        'first_half_train': len(first_half_train),
-        'first_half_val': len(first_half_val),
-        'second_half_total': len(second_half),
-        'second_half_train': len(second_half_train),
-        'second_half_val': len(second_half_val)
-    }
+
+    return first_half, second_half
 
 def copy_files(file_list, destination):
     """Copy files from source to destination"""
@@ -151,8 +154,7 @@ def main(args):
             class_name, 
             args.original_dir, 
             args.st_dir, 
-            args.output_dir, 
-            args.val_ratio, 
+            args.output_dir,
             args.random_seed
         )
         if class_stats:
@@ -167,8 +169,8 @@ def main(args):
     for stat in stats:
         print(f"Class: {stat['class']}")
         print(f"  Original images: {stat['total_original']}, Style-transferred: {stat['total_st']}, Missing ST: {stat['missing_st']}")
-        print(f"  First half: {stat['first_half_total']} total, {stat['first_half_train']} train, {stat['first_half_val']} validation")
-        print(f"  Second half: {stat['second_half_total']} total, {stat['second_half_train']} train, {stat['second_half_val']} validation")
+        print(f"  First half: {stat['first_half']} total")
+        print(f"  Second half: {stat['second_half']} total")
 
 if __name__ == "__main__":
     args = parse_args()
