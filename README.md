@@ -108,7 +108,7 @@ Apply Neural Style Transfer to augment images:
 python scripts/nst/nst_batch.py \
   --content data/processed/dataset_balanced \
   --style data/processed/style-images-resized \
-  --output data/processed/nst_output
+  --output data/processed/dataset_balanced_nst
 ```
 
 Generates style-transferred versions of the balanced dataset. Uses the provided [style images](data/processed/style-images-resized/).
@@ -137,8 +137,8 @@ Combine the original balanced and the NST dataset to create the stage 2 dataset 
 ```bash
 python scripts/prepare_datasets/prepare_dataset_stage_2.py \
   --original_dir data/processed/dataset_balanced \
-  --st_dir data/processed/nst_output \
-  --output_dir data/processed/dataset_combined
+  --st_dir data/processed/dataset_balanced_nst \
+  --output_dir data/processed/dataset_stage2
 ```
 
 ---
@@ -151,16 +151,16 @@ Model training occurs in two stages:
 In the first stage, a base model is fine-tuned on the unbalanced stage 1 dataset. The base model is a pre-trained MobileNetv2 with all but the last layer block frozen and a classification head on top. Macro F1 Score is used as validation metric.
 
 ```bash
-python scripts/training/training_stage_1.py \
-  --train-dir data/processed/dataset_stage1/train \
-  --val-dir data/processed/dataset_stage1/val
+python rraining_stage_1.py \
+  --train_dir data/processed/dataset_stage1/train \
+  --val_dir data/processed/dataset_stage1/val
 ```
 #### Stage 2
 In the second stage, the best model from stage 1 is further fine-tuned, now on the NST-augmented, balanced stage 2 dataset, using a cross-style approach.
 
 ```bash
-python scripts/training/training_stage_1.py \
-  --data-dir data/processed/dataset_stage2 \
+python training_stage_2.py \
+  --data_dir data/processed/dataset_stage2 \
   --base_model outputs/models/finetune_orig_best.h5
 ```
 
