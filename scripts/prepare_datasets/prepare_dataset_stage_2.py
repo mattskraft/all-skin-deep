@@ -41,7 +41,7 @@ def create_directory_structure(base_dir):
     
     print(f"Created directory structure at {base_dir}")
 
-def process_class(class_name, original_dir, st_dir, output_dir, val_ratio, random_seed):
+def process_class(class_name, original_dir, st_dir, output_dir, random_seed):
     """Process a single class combining original and ST images"""
     print(f"\nProcessing class: {class_name}")
     
@@ -73,7 +73,7 @@ def process_class(class_name, original_dir, st_dir, output_dir, val_ratio, rando
     
     # Mix shuffled files and split into two halves
     first_half, second_half = mix_and_split_files(
-        common_files, missing_files, original_class_dir, st_class_dir, val_ratio, random_seed
+        common_files, missing_files, original_class_dir, st_class_dir, random_seed
     )
     
     # Create class directories

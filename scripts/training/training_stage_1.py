@@ -9,11 +9,13 @@ based on validation F1-score and training history artifacts.
 
 import argparse
 from pathlib import Path
-import model_utils as utils
+import training_utils as utils
+import sys
+sys.path.append('..')
 import config as cfg
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Fine-tune model with original dataset")
+    parser = argparse.ArgumentParser(description="Stage 1: Fine-tune model with original dataset")
     
     # Load defaults using the config module alias
     parser.add_argument("--train_dir", type=str, default=cfg.TRAIN_1_DIR,
@@ -26,8 +28,6 @@ def parse_args():
                         help=f"Learning rate (default: {cfg.LEARNING_RATE_1})")
     parser.add_argument("--epochs", type=int, default=cfg.NUM_EPOCHS,
                         help=f"Number of epochs (default: {cfg.NUM_EPOCHS})")
-    parser.add_argument("--model_name", type=str, default="finetune_orig",
-                        help="Base name for saving model and artifacts (default: finetune_orig)")
     
     return parser.parse_args()
 
@@ -36,7 +36,6 @@ def main(args):
     train_dir = Path(args.train_dir)
     val_dir = Path(args.val_dir)
     model_dir = Path(args.model_dir)
-    model_name = args.model_name
     
     train_generator, steps_per_epoch = utils.create_weighted_generator(train_dir)
     print(f"Created weighted training generator with {steps_per_epoch} steps per epoch")
@@ -44,7 +43,7 @@ def main(args):
     val_generator = utils.create_regular_generator(val_dir)
     print(f"Created validation generator with {len(val_generator.filenames)} images")
 
-    best_model_path = model_dir / f"{model_name}_best.h5"
+    best_model_path = model_dir / f"model_stage2_best.h5"
     callbacks_list = utils.make_callbacks_list(best_model_path, val_generator)
     print(f"Configured callbacks with best model checkpoint at {best_model_path}")
 
@@ -70,12 +69,11 @@ def main(args):
     )
 
     print("\nSaving training artifacts...")
-    utils.save_training_artifacts(history, model_dir, model_name)
-    print("Artifacts saved successfully.")
-
-    print("\nTraining completed.")
+    history_save_path = model_dir / f"training_history_stage2.csv"
+    utils.save_training_artifacts(history, history_save_path)
     print(f"Best model saved to: {best_model_path}")
-    print(f"Training history saved to: {model_dir}/{model_name}_history.csv")
+    print("\nTraining completed.")
+
 
 if __name__ == "__main__":
     args = parse_args()
