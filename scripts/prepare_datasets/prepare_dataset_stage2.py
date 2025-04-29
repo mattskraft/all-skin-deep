@@ -1,3 +1,13 @@
+"""
+Prepare Dataset for Stage 2 Training
+
+Prepare dataset for cross-style training by combining original and style-transferred images.
+This script creates a directory structure for the combined dataset, processes each class,
+and splits the images into two halves for cross-training. Each half contains a mix of
+original and style-transferred images. The script also handles missing style-transferred
+images and ensures that the dataset is balanced across classes.
+"""
+
 import os
 import random
 import shutil
