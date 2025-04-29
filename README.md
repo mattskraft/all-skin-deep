@@ -35,15 +35,16 @@ This repository contains the code and workflows for preparing a skin lesion data
 ├── notebooks/           # Jupyter notebooks
 ├── scripts/             # project code
 │   ├── prepare_datasets/
-│   │   ├── prepare_datasets_1_and_2.py
-│   │   ├── prepare_dataset_3.py
+│   │   ├── prepare_dataset_stage_1.py
+│   │   ├── prepare_dataset_stage_2.py
 │   ├── nst/
-│   │   ├── nst_main.py
+│   │   ├── nst_batch.py
+│   │   ├── nst_single.py
 │   │   ├── nst_utils.py
 │   ├── training/
-│   │   ├── finetune_orig.py
-│   │   ├── finetune_cross.py
-│   │   ├── model_utils.py
+│   │   ├── training_stage_1.py
+│   │   ├── training_stage_2.py
+│   │   ├── training_utils.py
 │   ├── config.py
 └── outputs/
     ├── plots/
@@ -84,7 +85,7 @@ notebooks/01_data_exploration_and_cleaning.ipynb
 Prepare datasets for training:
 
 ```bash
-python scripts/prepare_datasets/prepare_datasets_1_and_2.py \
+python scripts/prepare_datasets/prepare_dataset_stage_1.py \
   --input_dir data/raw/HAM10000/images \
   --metadata data/raw/HAM10000/HAM10000_metadata_clean.csv \
   --output_dir data/processed/ \
@@ -104,7 +105,7 @@ Creates:
 Apply Neural Style Transfer to augment images:
 
 ```bash
-python scripts/nst/nst_main.py \
+python scripts/nst/nst_batch.py \
   --content data/processed/dataset_balanced \
   --style data/processed/style-images-resized \
   --output data/processed/nst_output
@@ -134,7 +135,7 @@ notebooks/02_examine_and_select_nst_images.ipynb
 Combine the original balanced and the NST dataset to create the stage 2 dataset for fine-tuning:
 
 ```bash
-python scripts/prepare_datasets/prepare_dataset_3.py \
+python scripts/prepare_datasets/prepare_dataset_stage_2.py \
   --original_dir data/processed/dataset_balanced \
   --st_dir data/processed/nst_output \
   --output_dir data/processed/dataset_combined
@@ -147,20 +148,19 @@ python scripts/prepare_datasets/prepare_dataset_3.py \
 Model training occurs in two stages:
 
 #### Stage 1
-In the first stage, a base model is fine-tuned on the unbalanced stage 1 dataset. The base model is a pre-trained MobileNetv2 with all but the last layer block frozen and a classification head on top. Given the clinical setting, macro F1 Score is used as validation metric.
+In the first stage, a base model is fine-tuned on the unbalanced stage 1 dataset. The base model is a pre-trained MobileNetv2 with all but the last layer block frozen and a classification head on top. Macro F1 Score is used as validation metric.
 
 ```bash
-python scripts/training/finetune_orig.py \
+python scripts/training/training_stage_1.py \
   --train-dir data/processed/dataset_stage1/train \
   --val-dir data/processed/dataset_stage1/val
 ```
-#### Stage 1
-In the second stage, the best model from stage 1 is further fine-tuned, now on the NST-augmented, balanced stage 2 dataset.
+#### Stage 2
+In the second stage, the best model from stage 1 is further fine-tuned, now on the NST-augmented, balanced stage 2 dataset, using a cross-style approach.
 
 ```bash
-python scripts/training/finetune_cross.py \
-  --train-dir data/processed/dataset_stage2/train \
-  --val-dir data/processed/dataset_stage2/val \
+python scripts/training/training_stage_1.py \
+  --data-dir data/processed/dataset_stage2 \
   --base_model outputs/models/finetune_orig_best.h5
 ```
 
@@ -180,8 +180,6 @@ notebooks/03_eval_model_on_testset.ipynb
     - Class-wise and macro F1 scores
     - Class-wise and top-3 classification accuracies
 
----
-
 ## Web APP Demo
 
 A live interactive demo of the final model is available:
@@ -190,8 +188,6 @@ A live interactive demo of the final model is available:
 
 The model was converted to TensorFlowJS format and deployed as a static web app.  
 This allows real-time skin lesion predictions directly in the browser without needing a server.
-
----
 
 ## Requirements
 
@@ -207,14 +203,10 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
----
-
 ## Notes
 
 - GPU strongly recommended for NST image generation
 - Random seeds are set for reproducibility
-
----
 
 ## Acknowledgments
 
@@ -224,9 +216,7 @@ This project was inspired and guided by the following works:
   Motivation for using a lightweight CNN architecture (MobileNetV2) with a focus on data privacy
 
 - [Improving Skin Color Diversity in Cancer Detection: Deep Learning Approach](https://pmc.ncbi.nlm.nih.gov/articles/PMC10334920/)  
-  Inspiration for applying Neural Style Transfer (NST) for dataset augmentation, and for evaluating image quality using SSIM and BRISQUE.
-
----
+  Inspiration for applying Neural Style Transfer (NST) for dataset augmentation, and for evaluating image quality using SSIM and BRISQUE
 
 ## License
 

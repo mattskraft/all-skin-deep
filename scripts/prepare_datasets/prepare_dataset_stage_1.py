@@ -6,7 +6,7 @@ This script performs the following steps:
 2. Creates an unbalanced dataset with a 70/15 split for training and validation,
    creates a directory structure and processes each class.
 3. Creates a balanced dataset with equal representation of classes. These images,
-   together with their NST versions, will be used by prepare_dataset_stage2.py
+   together with their NST versions, will be used by prepare_dataset_stage_2.py
    to create the stage 2 dataset (cross-style training).
 """
 

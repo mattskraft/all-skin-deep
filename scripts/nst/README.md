@@ -7,7 +7,7 @@ This repository contains code for applying neural style transfer to create augme
 The code is organized into the following files:
 
 - `nst_utils.py`: Contains utility functions and classes for neural style transfer
-- `nst_main.py`: Main script for batch processing of images
+- `nst_batch.py`: Main script for batch processing of images
 - `nst_single.py`: Example script for processing a single image pair
 
 ## Requirements
@@ -26,7 +26,7 @@ The code is organized into the following files:
 To process entire directories of images with random style assignment:
 
 ```bash
-python nst_main.py --content data/processed/dataset_balanced \
+python nst_batch.py --content data/processed/dataset_balanced \
                    --style data/processed/style-images-resized \
                    --output data/processed/nst_output
                    --steps 1000 \
