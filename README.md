@@ -85,7 +85,7 @@ notebooks/01_data_exploration_and_cleaning.ipynb
 Prepare datasets for training:
 
 ```bash
-python scripts/prepare_datasets/prepare_dataset_stage_1.py \
+python prepare_dataset_stage_1.py \
   --input_dir data/raw/HAM10000/images \
   --metadata data/raw/HAM10000/HAM10000_metadata_clean.csv \
   --output_dir data/processed/ \
@@ -105,7 +105,7 @@ Creates:
 Apply Neural Style Transfer to augment images:
 
 ```bash
-python scripts/nst/nst_batch.py \
+python nst_batch.py \
   --content data/processed/dataset_balanced \
   --style data/processed/style-images-resized \
   --output data/processed/dataset_balanced_nst
@@ -135,7 +135,7 @@ notebooks/02_examine_and_select_nst_images.ipynb
 Combine the original balanced and the NST dataset to create the stage 2 dataset for fine-tuning:
 
 ```bash
-python scripts/prepare_datasets/prepare_dataset_stage_2.py \
+python prepare_dataset_stage_2.py \
   --original_dir data/processed/dataset_balanced \
   --st_dir data/processed/dataset_balanced_nst \
   --output_dir data/processed/dataset_stage2
@@ -151,7 +151,7 @@ Model training occurs in two stages:
 In the first stage, a base model is fine-tuned on the unbalanced stage 1 dataset. The base model is a pre-trained MobileNetv2 with all but the last layer block frozen and a classification head on top. Macro F1 Score is used as validation metric.
 
 ```bash
-python rraining_stage_1.py \
+python training_stage_1.py \
   --train_dir data/processed/dataset_stage1/train \
   --val_dir data/processed/dataset_stage1/val
 ```
