@@ -184,7 +184,7 @@ notebooks/03_eval_model_on_testset.ipynb
 
 A live interactive demo of the final model is available:
 
-👉 [Try the Skin Lesion Classifier in your browser](https://precious-haupia-39d814.netlify.app/)
+👉 [Try the Skin Lesion Classifier in your browser](https://effervescent-tartufo-d88474.netlify.app/)
 
 The model was converted to TensorFlowJS format and deployed as a static web app.  
 This allows real-time skin lesion predictions directly in the browser without needing a server.
