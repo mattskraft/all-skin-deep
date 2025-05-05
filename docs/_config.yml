@@ -1,4 +1,4 @@
 theme: minima
-title: Skin Lesion Classification with Neural Style Transfer
-description: A deep learning project combining dataset augmentation, transfer learning, and web deployment.
+title: Skin Lesion Classification across all Skin Tones
+description: Mitigating skin tone bias in skin lesion classification using Neural Style Transfer.
 author: Matthias Schultze-Kraft
