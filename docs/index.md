@@ -1,4 +1,5 @@
-# Fairer AI for Skin Cancer Detection: A Deep Learning Approach
+
+<!-- # Fairer AI for Skin Cancer Detection: A Deep Learning Approach -->
 
 **Welcome!** This portfolio project was built during a three-week sprint in my data science bootcamp — from exploration to prototyping, training, and deployment. The goal: develop a lightweight, privacy-respecting AI model that can identify malignant skin lesions **across all skin tones**.
 
@@ -139,7 +140,7 @@ In a nutshell, NST blends the content of one image with the style of another by 
 
 <figure style="text-align: center; font-style: italic;">
   <img src="plots/VGG-19-NST.png" alt="VGG19-NST" width="450">
-  <figcaption> Figure: VGG-19 architecture used for neural style transfer. Content features are collected from <code>conv4_2</code>, while style features are collected from <code>conv1_1</code> to <code>conv5_1</code>. </figcaption>
+  <figcaption>VGG-19 architecture used for neural style transfer. Content features are collected from <code>conv4_2</code>, while style features are collected from <code>conv1_1</code> to <code>conv5_1</code>. </figcaption>
 </figure>
 
 ### Process overview
@@ -177,7 +178,7 @@ The figure below shows four examples of content/style/generated image triplets. 
 
 <figure style="text-align: center; font-style: italic;">
   <img src="plots/NST-output-examples.png" alt="Pipeline" width="500">
-  <figcaption> Figure: Four examples of style-transferred skin lesion images, blending lesion content with dark-skin textures.</figcaption>
+  <figcaption>Four examples of style-transferred skin lesion images, blending lesion content with dark-skin textures.</figcaption>
 </figure>
 
 As a preliminary sanity check, I calculated the Structural Similarity Index Measure (SSIM) between each original content image and its style-transferred counterpart. SSIM measures similarity based on luminance, contrast, and structure, where 1 means perfect similarity and 0 means no similarity. The histogram below shows that while most generated images maintain decent similarity, a few are clear outliers. Manual inspection confirmed that something had gone wrong in those cases. For this project, I excluded all images with an SSIM score below 0.3.
@@ -234,7 +235,7 @@ Let us now go through it step by step, explaining important parameter choices on
 
 <figure style="text-align: center; font-style: italic;">
   <img src="plots/training_history.png" alt="Training history" width="600">
-  <figcaption>Figure: Training history of stage 1 (left) and of the two round1 of stage 2 (right). Shown is the training and validation loss (top) and the training and validation metric (F1-score macro) (bottom).</figcaption>
+  <figcaption>Training history of stage 1 (left) and of the two round1 of stage 2 (right). Shown is the training and validation loss (top) and the training and validation metric (F1-score macro) (bottom).</figcaption>
 </figure>
 
 </details>
@@ -257,7 +258,7 @@ However, it also had a high **false positive rate**: many non-melanoma lesions w
 <div style="text-align: center; font-style: italic;">
   <img src="plots/confusion_matrix_test_1.png" alt="Confusion matrix 1" width="40%" style="display: inline-block; margin-right: 20px;">
   <img src="plots/confusion_matrix_test_2.png" alt="Confusion matrix 2" width="40%" style="display: inline-block;">
-  <figcaption>Figure: Confusion matrices on the test set after stage 1 (left) and after stage 2 (right). Each row shows how often a true class is predicted as each class. Rows sum to 1.</figcaption>
+  <figcaption>Confusion matrices on the test set after stage 1 (left) and after stage 2 (right). Each row shows how often a true class is predicted as each class. Rows sum to 1.</figcaption>
 </div>
 
 ### F1 Scores and Top-3 Accuracy
