@@ -60,10 +60,9 @@ Use a lightweight model to ensure data privacy and efficient classification
 
 Defining this early in the project helped guide model selection. To ensure data privacy, one option is to run the model entirely in the browser, so that no data ever leaves the user's device. This requires a model with a lightweight architecture that can run inference quickly. Among the commonly used models, MobileNetV2 stood out for being small, fast, and browser-compatible.
 
-<figure style="text-align: center; font-style: italic;">
-  <img src="plots/VisualModelSizes.png" alt="VGG19-NST" width="250">
-  <figcaption></figcaption>
-</figure>
+<p align="center">
+  <img src="plots/VisualModelSizes.png" alt="VGG19-NST" width="300">
+</p>
 
 ### Objective 3:
 
@@ -100,8 +99,8 @@ These results could help the clinician rule out Case 1 (clear benign), and prior
 ## Dataset
 For this project, I used the **HAM10000** dataset that is described in detail [here](https://www.nature.com/articles/sdata2018161) and can be downloaded from [Kaggle](https://www.kaggle.com/datasets/kmader/skin-cancer-mnist-ham10000). It consists of 10015 dermatoscopic images covering 7 different diagnoses. As this plot shows
 
-<figure style="text-align: center; font-style: italic;">
-  <img src="plots/HAM10k_class_distribution.png" alt="Class distribution" width="700">
+<figure style="font-style: italic;">
+  <img src="plots/HAM10k_class_distribution.png" alt="Class distribution" width="700" style="display: block; margin: 0 auto;">
   <figcaption>Class distribution in the HAM10000 dataset. Benign diagnoses are color-coded in green, non-dangerous but cancerous diagnoses in yellow, and the critical melanoma class in red. </figcaption>
 </figure>
 
@@ -110,8 +109,8 @@ the dataset is highly unbalanced: benign nevi appear about 6 times more often th
 Another important caveat is that the dataset includes **multiple images of the same lesion**:
 
 <div style="text-align: center; margin-bottom: 1em; font-style: italic;">
-  <img src="plots/HAM10k_duplicates.png" alt="Duplicate counts" width="30%" style="display: inline-block; margin-right: 10px;">
-  <img src="plots/HAM10k_duplicate_example.png" alt="Duplicate example" width="60%" style="display: inline-block">
+  <img src="plots/HAM10k_duplicates.png" alt="Duplicate counts" width="33%" style="display: inline-block; margin-right: 10px;">
+  <img src="plots/HAM10k_duplicate_example.png" alt="Duplicate example" width="63%" style="display: inline-block">
   <figcaption>Left: number of images per lesion. About half of lesions have more than one image. Right: An example of a lesion with three images taken under different conditions.</figcaption>
 </div>
 
@@ -138,8 +137,8 @@ For this project, I followed the approach of  Neural Style Transfer (NST) as out
 
 In a nutshell, NST blends the content of one image with the style of another by optimizing a new image to match high-level structure from the content image and low-level texture patterns from the style image, using a pre-trained VGG-19 convolutional neural network.
 
-<figure style="text-align: center; font-style: italic;">
-  <img src="plots/VGG-19-NST.png" alt="VGG19-NST" width="450">
+<figure style="font-style: italic;">
+  <img src="plots/VGG-19-NST.png" alt="VGG19-NST" width="500" style="display: block; margin: 0 auto;">
   <figcaption>VGG-19 architecture used for neural style transfer. Content features are collected from <code>conv4_2</code>, while style features are collected from <code>conv1_1</code> to <code>conv5_1</code>. </figcaption>
 </figure>
 
@@ -176,8 +175,8 @@ To do this, I assembled the two cumstom datasets:
 
 The figure below shows four examples of content/style/generated image triplets. Overall, NST appeared to work as intended: the synthetic images reflect the texture and tone of the style image while retaining the shape and detail of the lesion from the content image. Whether the features most relevant for classification (e.g., lesion borders, color structures) are preserved remains an open question — and can only be assessed through model performance.
 
-<figure style="text-align: center; font-style: italic;">
-  <img src="plots/NST-output-examples.png" alt="Pipeline" width="500">
+<figure style="font-style: italic;">
+  <img src="plots/NST-output-examples.png" alt="Pipeline" width="500" style="display: block; margin: 0 auto;">
   <figcaption>Four examples of style-transferred skin lesion images, blending lesion content with dark-skin textures.</figcaption>
 </figure>
 
@@ -204,8 +203,8 @@ Developing a working training pipeline involved quite a bit of prototyping and p
 
 - After each stage, the model was evaluated on the test set (referred to as Test 1 and Test 2 in the figure). Test 1 assesses how well the model performs on light skin (a baseline), while Test 2 checks whether fine-tuning on style-transferred images has negatively impacted overall performance.
 
-<figure style="text-align: center; font-style: italic;">
-  <img src="plots/Pipeline.png" alt="Pipeline" width="500">
+<figure style="font-style: italic;">
+  <img src="plots/Pipeline.png" alt="Pipeline" width="500" style="display: block; margin: 0 auto;">
   <figcaption> </figcaption>
 </figure>
 
@@ -270,8 +269,8 @@ Results are mixed: some classes benefit from stage 2 fine-tuning, while others (
 In clinical triage, knowing whether the correct label is among the model’s top 3 predictions is often more useful than a single-label decision.
 
 <div style="text-align: center; font-style: italic;">
-  <img src="plots/f1_scores_with_macro_highlighted.png" alt="Confusion matrix 1" height="250" style="display: inline-block; margin-right: 20px;">
-  <img src="plots/top_3_accuracy_by_test.png" alt="Confusion matrix 2" height="250" style="display: inline-block;">
+  <img src="plots/f1_scores_with_macro_highlighted.png" alt="Confusion matrix 1" height="200" style="display: inline-block; margin-right: 20px;">
+  <img src="plots/top_3_accuracy_by_test.png" alt="Confusion matrix 2" height="200" style="display: inline-block;">
   <figcaption>Left: F1 scores by class (macro average highlighted). Right: Top-3 accuracy comparison between the two tests.</figcaption>
 </div>
 
