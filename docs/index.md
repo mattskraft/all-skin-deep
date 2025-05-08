@@ -292,8 +292,8 @@ Results are mixed: some classes benefit from stage 2 fine-tuning, while others (
 In clinical triage, knowing whether the correct label is among the model’s top 3 predictions is often more useful than a single-label decision.
 
 <div style="text-align: center; font-style: italic;">
-  <img src="plots/f1_scores_with_macro_highlighted.png" alt="Confusion matrix 1" height="200" style="display: inline-block; margin-right: 20px;">
-  <img src="plots/top_3_accuracy_by_test.png" alt="Confusion matrix 2" height="200" style="display: inline-block;">
+  <img src="plots/f1_scores_with_macro_highlighted.png" alt="Confusion matrix 1" height="300" style="display: inline-block; margin-right: 20px;">
+  <img src="plots/top_3_accuracy_by_test.png" alt="Confusion matrix 2" height="300" style="display: inline-block;">
   <figcaption>Left: F1 scores by class (macro average highlighted). Right: Top-3 accuracy comparison between the two tests.</figcaption>
 </div>
 
