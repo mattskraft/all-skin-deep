@@ -1,5 +1,5 @@
 
-<!-- # Fairer AI for Skin Cancer Detection: A Deep Learning Approach -->
+<!-- # Toward Fairer Skin Lesion Classification with Deep Learning -->
 
 **Welcome!** This portfolio project was built during a three-week sprint in my data science bootcamp — from exploration to prototyping, training, and deployment. The goal: develop a lightweight, privacy-respecting AI model that can identify malignant skin lesions **across all skin tones**.
 
@@ -208,36 +208,59 @@ Developing a working training pipeline involved quite a bit of prototyping and p
   <figcaption> </figcaption>
 </figure>
 
-<details>
-<summary><strong>Click to expand step-by-step breakdown of the training pipeline</strong></summary>
-Let us now go through it step by step, explaining important parameter choices on the way.
+<details style="border: 1px solid #ccc; padding: 1em; border-radius: 6px; margin: 1.5em 0; background-color: #f9f9f9;">
+  <summary><strong>Click to expand step-by-step breakdown of the training pipeline</strong></summary>
 
-- From the total dataset, a test set (15%) was split off that would be used later on to evaluate the model after both training stages.
+  <p>Let us now go through it step by step.</p>
 
-- The remaining images were used for the two training stages:
-    - For stage 1, all images were further split into a train (70%) and validation set (15%).
-    - For stage 2, a class-balanced dataset was created by selecting all images from the smalles class and randomly selecting the same number of images from the larger classes. This dataset was used to generate synthetic images with NST.
+  <ul>
+    <li>From the total dataset, a test set (15%) was split off and used later to evaluate the model after both training stages.</li>
+    <li>
+      The remaining images were used for the two training stages:
+      <ul>
+        <li>For stage 1, all images were further split into a train (70%) and validation set (15%).</li>
+        <li>For stage 2, a class-balanced dataset was created by selecting all images from the smallest class and randomly sampling the same number of images from the larger classes. This dataset was used to generate synthetic images with NST.</li>
+      </ul>
+    </li>
+    <li>
+      The stage 1 training essentially consisted of fine-tuning a pre-trained MobileNetV2 model:
+      <ul>
+        <li>All but the last block (about 8 layers) of the base model were frozen, and a classification head (7 output neurons, softmax) was added.</li>
+        <li>
+          Two measures were taken to mitigate the heavy class imbalance:
+          <ul>
+            <li>A weighted data generator oversampled underrepresented classes during batch selection.</li>
+            <li>A weighted focal loss was implemented to further account for class imbalance using class weights.</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li>
+      The dataset for stage 2 training was created as follows:
+      <ul>
+        <li>Neural style transfer was used to generate synthetic images. Each image in the class-balanced dataset was chosen as a content image and randomly paired with a manually selected style image.</li>
+        <li>Half of the synthetic images were randomly selected and combined with the natural versions of the other half, and vice versa, creating two mixed datasets of both natural and NST-generated images.</li>
+      </ul>
+    </li>
+    <li>
+      Stage 2 training followed a cross-style strategy:
+      <ul>
+        <li>In round 1, the model was trained on one half of the dataset and evaluated on the other.</li>
+        <li>In round 2, the roles of the datasets were reversed.</li>
+      </ul>
+    </li>
+    <li>The training history plots show a steady decrease in loss and an increase in F1 score over time in both stages. While stage 1 training follows a typical fine-tuning curve, stage 2 shows some fluctuation due to the mixed natural and style-transferred data. Overall, the model converges well in both cases without signs of overfitting.</li>
+  </ul>
 
-- The stage 1 training essentially consisted in a fine-tuning of a pre-trained MobileNetV2 model.
-    - All but the last block (about 8 layers) of the base model where frozen, and a classification head with (7 output neurons, softmax) was put on top.
-    - Two measures were taken to mitigate the heavy class-imbalance of the data:
-        - A weighted data generator was implemented that oversampled underrepresented classes during batch selection.
-        - A weighted focal loss was implemented that uses class weights to handle class imbalance.
-
-- The dataset for stage 2 training was created as follows:
-    - Neural style transfer was used to generate synthetic images. For this, each image in the class-balanced dataset was chosen as content image and randomly paired with an image from the manually selected style images.
-    - Half of the synthetic images were randomly selected and combined with the natural version of the other half, and vice versa, creating two datasets that each consist of both natural and NST generated images.
-
-- The stage 2 training then was a cross-style training that consisted in two rounds. During round 1, the model was trained on one half of the above dataset and evaluated on the other, while during round 2 it was the other way around.
-
-- The training history plots show a steady decrease in loss and an increase in F1 score over time in both stages. While stage 1 training follows a typical fine-tuning curve, stage 2 shows some fluctuation due to the mixed natural and style-transferred data. Overall, the model converges well in both cases without signs of overfitting.
-
-<figure style="text-align: center; font-style: italic;">
-  <img src="plots/training_history.png" alt="Training history" width="600">
-  <figcaption>Training history of stage 1 (left) and of the two round1 of stage 2 (right). Shown is the training and validation loss (top) and the training and validation metric (F1-score macro) (bottom).</figcaption>
-</figure>
+  <figure style="margin-top: 1em; text-align: center;">
+    <img src="plots/training_history.png" alt="Training history" style="display: block; margin: 0 auto;" width="600">
+    <figcaption style="font-style: italic;">
+      Training history of stage 1 (left) and the two rounds of stage 2 (right). Top: training and validation loss. Bottom: training and validation F1 score (macro).
+    </figcaption>
+  </figure>
 
 </details>
+
 
 ## Model Evaluation
 
